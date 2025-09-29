@@ -1,0 +1,39 @@
+{
+  "version": "2.0",
+  "functionTimeout": "00:05:00",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      },
+      "enableLiveMetricsFilters": false
+    },
+    "logLevel": {
+      "default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Azure.Functions.Worker": "Information"
+    }
+  },
+  "extensions": {
+    "http": {
+      "routePrefix": "api",
+      "maxOutstandingRequests": 500,
+      "maxConcurrentRequests": 500,
+      "dynamicThrottlesEnabled": true
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  },
+  "managedDependency": {
+    "enabled": true
+  },
+  "retry": {
+    "strategy": "exponentialBackoff",
+    "maxRetryCount": 1,
+    "minimumInterval": "00:00:02",
+    "maximumInterval": "00:00:15"
+  }
+}

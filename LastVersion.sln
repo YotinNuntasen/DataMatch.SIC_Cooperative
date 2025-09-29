@@ -1,0 +1,29 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data-match-backend", "data-match-backend", "{B3CE2932-2638-A839-7404-E8E5BB76534D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "data-match-backend", "data-match-backend\data-match-backend\data-match-backend.csproj", "{459135F9-DA42-57AE-8035-E196627A690E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{459135F9-DA42-57AE-8035-E196627A690E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{459135F9-DA42-57AE-8035-E196627A690E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{459135F9-DA42-57AE-8035-E196627A690E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{459135F9-DA42-57AE-8035-E196627A690E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{459135F9-DA42-57AE-8035-E196627A690E} = {B3CE2932-2638-A839-7404-E8E5BB76534D}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FEB29C8B-2EF6-4A73-A3DB-8802D4EB5E39}
+	EndGlobalSection
+EndGlobal
