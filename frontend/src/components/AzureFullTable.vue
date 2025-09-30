@@ -70,6 +70,7 @@
 <script>
 // ส่วน <script> ไม่มีการแก้ไข สามารถคงไว้เหมือนเดิมได้
 import AzureDataRowCard from './AzureDataRowCard.vue';
+import { formatDate, formatCurrency } from '@/utils/formatters';
 import {
     calculateNameSimilarity,
     calculatePcodeSimilarity,
@@ -224,15 +225,6 @@ export default {
                 });
             }
             this.closeModal();
-        },
-
-        formatDate(dateString) {
-            if (!dateString) return 'N/A';
-            try {
-                const date = new Date(dateString);
-                if (isNaN(date.getTime())) { return dateString; }
-                return date.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
-            } catch { return dateString; }
         },
 
         compareTextDirectly(val1, val2) {

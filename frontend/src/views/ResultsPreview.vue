@@ -146,6 +146,7 @@
 <script>
 import { mapGetters, mapActions } from 'vuex';
 import azureService from '../services/azureService';
+import { formatDate, formatCurrency } from '@/utils/formatters';
 
 export default {
   name: 'ResultsPreview',
@@ -154,7 +155,7 @@ export default {
       showPreview: false,
       localExportFormat: 'excel',
       localFileName: 'matched-data-export',
-      isUpdating: false, // State สำหรับจัดการสถานะการ update
+      isUpdating: false,
     };
   },
   computed: {
@@ -180,52 +181,54 @@ export default {
       'exportFile',
       'clearExportHistory'
     ]),
-    goBack() { this.$router.push({ name: 'DataMatching' }); },
-    previewData() { this.showPreview = !this.showPreview; },
-    clearHistory() {
-      if (confirm('Are you sure you want to clear the export history?')) {
-        this.clearExportHistory();
-      }
-    },
+    
+    // ✅ Expose formatters from utils
+    formatCurrency,
+    
+    // ✅ Wrapper for formatDate with includeTime option
     formatDate(dateStr, includeTime = false) {
       if (!dateStr) return 'N/A';
+      
+      const options = includeTime 
+        ? { dateStyle: 'medium', timeStyle: 'short' }
+        : { dateStyle: 'medium' };
+      
       try {
-        const options = { dateStyle: 'medium' };
-        if (includeTime) {
-          options.timeStyle = 'short';
-        }
         return new Intl.DateTimeFormat('en-GB', options).format(new Date(dateStr));
       } catch {
         return 'Invalid Date';
       }
     },
-    formatCurrency(value) {
-      if (value === null || value === undefined || isNaN(value)) {
-        return '฿0';
+    
+    goBack() { this.$router.push({ name: 'DataMatching' }); },
+    
+    previewData() { this.showPreview = !this.showPreview; },
+    
+    clearHistory() {
+      if (confirm('Are you sure you want to clear the export history?')) {
+        this.clearExportHistory();
       }
-      return new Intl.NumberFormat('th-TH', {
-        style: 'currency',
-        currency: 'THB',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(value);
     },
+    
     updateExportFormat() { this.setExportFormat(this.localExportFormat); },
+    
     updateFileName() { this.setFileName(this.localFileName.trim()); },
+    
     async handleExport() { await this.exportFile(); },
-
 
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
         alert("No data available to update.");
         return;
       }
-      const confirmed = confirm(`Are you sure you want to update/create ${this.safeExportData.length} records in Azure Table? This action cannot be undone.`);
-      if (!confirmed) {
-        return;
-      }
+      
+      const confirmed = confirm(
+        `Are you sure you want to update/create ${this.safeExportData.length} records in Azure Table? This action cannot be undone.`
+      );
+      
+      if (!confirmed) return;
 
-      this.isUpdating = true; // --- เริ่มการอัปเดต, disable ปุ่ม
+      this.isUpdating = true;
       try {
         const payload = this.prepareUpdatePayload();
         const result = await azureService.updateMergedData(payload);
@@ -236,9 +239,10 @@ export default {
         alert(`Update failed: ${errorMessage}`);
         console.error("Update error:", error);
       } finally {
-        this.isUpdating = false; // --- 
+        this.isUpdating = false;
       }
     },
+    
     prepareUpdatePayload() {
       return {
         records: this.safeExportData
@@ -276,6 +280,7 @@ export default {
       };
     },
   },
+  
   created() {
     this.prepareExportData();
     this.localExportFormat = this.exportFormat || 'excel';

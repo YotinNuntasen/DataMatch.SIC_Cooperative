@@ -78,8 +78,10 @@
   </div>
 </template>
 
+
 <script>
 import { getFieldComparisons } from '../utils/similarity';
+import { formatDate } from '@/utils/formatters';
 
 export default {
   name: 'AzureDataRowCard',
@@ -104,18 +106,8 @@ export default {
     }
   },
   methods: {
-    formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-          return dateString;
-        }
-        return date.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
-      } catch (e) {
-        return dateString;
-      }
-    },
+    // ✅ Expose formatDate from utils
+    formatDate,
 
     getComparisonClass(fieldType) {
       const status = this.fieldComparisons[fieldType];
@@ -144,17 +136,18 @@ export default {
 
     emitMatch() {
       const rowKey = this.data.RowKey || this.data.rowKey;
-      console.log('🎯 Matching item with RowKey:', rowKey); // Debug log
+      console.log('🎯 Matching item with RowKey:', rowKey);
 
       this.$emit('match', {
         sharePointItem: this.sharepointItem,
         azureItem: {
           ...this.data,
-          RowKey: rowKey // Ensure RowKey is set
+          RowKey: rowKey
         },
         similarity: this.similarity
       });
     },
+    
     emitCompare() {
       this.$emit('compare', {
         azureItem: this.data,

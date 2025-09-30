@@ -40,10 +40,12 @@ const getters = {
     };
   },
 
-  // 🔥🔥🔥 Getter สำคัญที่ดึงข้อมูลรายได้มาจาก dataMatching store 🔥🔥🔥
-  totalRevenue: (state, getters, rootState, rootGetters) => {
-    // ใช้ rootGetters เพื่อเข้าถึง getter จาก module อื่น
-    return rootGetters["dataMatching/totalRevenue"] || 0;
+  totalRevenue: (state, getters) => {
+    return getters.safeExportData.reduce((total, pair) => {
+      return (
+        total + (pair.azure?.calculatedRevenue || pair.calculatedRevenue || 0)
+      );
+    }, 0);
   },
 };
 
@@ -122,7 +124,6 @@ const actions = {
       }
     } catch (error) {
       console.error("Export process failed:", error);
-    
     }
   },
 
@@ -142,33 +143,34 @@ const actions = {
       commit("SET_EXPORT_DATA", matchedPairs);
 
       const selectedColumns = [
-        'SP: opportunityName',
-        'SP: opportunityId',
-        'AZ: selltoCustName_SalesHeader',
-        'AZ: custShortDimName',
-        'AZ: itemReferenceNo',
-        'AZ: documentDate',
-        'SP: s9DWINEntryDate',
-        'AZ: salespersonDimName',
-        'AZ: prodChipNameDimName',
-        'AZ: quantity',
-        'AZ: sellToCustomerNo',
-        'AZ: totalSales',
-        'AZ: description',
+        "SP: opportunityName",
+        "SP: opportunityId",
+        "AZ: selltoCustName_SalesHeader",
+        "AZ: custShortDimName",
+        "AZ: itemReferenceNo",
+        "AZ: documentDate",
+        "SP: s9DWINEntryDate",
+        "AZ: salespersonDimName",
+        "AZ: prodChipNameDimName",
+        "AZ: quantity",
+        "AZ: sellToCustomerNo",
+        "AZ: totalSales",
+        "AZ: description",
       ];
 
-
       commit("SET_AVAILABLE_COLUMNS", selectedColumns);
-    commit("SET_SELECTED_COLUMNS", selectedColumns);
+      commit("SET_SELECTED_COLUMNS", selectedColumns);
 
-    console.log(`Prepared ${matchedPairs.length} records for export with ${selectedColumns.length} columns.`);
-  } catch (e) {
-    console.error("Failed to prepare export data:", e);
-    commit("SET_ERROR", "Could not prepare data for results page.");
-  } finally {
-    commit("SET_LOADING", false);
-  }
-},
+      console.log(
+        `Prepared ${matchedPairs.length} records for export with ${selectedColumns.length} columns.`
+      );
+    } catch (e) {
+      console.error("Failed to prepare export data:", e);
+      commit("SET_ERROR", "Could not prepare data for results page.");
+    } finally {
+      commit("SET_LOADING", false);
+    }
+  },
 
   // Actions สำหรับตั้งค่า
   updateSelectedColumns({ commit }, columns) {

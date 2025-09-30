@@ -139,14 +139,10 @@ const actions = {
       await msalInstance.logoutPopup({ account });
     }
     commit('CLEAR_USER');
-    // ไม่ต้อง redirect เอง ปล่อยให้ router guard จัดการ
+    
   },
   
-  /**
-   * Action กลางสำหรับขอ Access Token สำหรับ SharePoint
-   * จะพยายามขอแบบเงียบๆ ก่อนเสมอ ถ้าไม่สำเร็จจะใช้ Popup
-   * นี่คือ action ที่ service อื่นๆ ควรเรียกใช้
-   */
+  
   async acquireSharePointToken({ state, dispatch }) {
     if (!state.isInitialized) {
       await dispatch("initialize");

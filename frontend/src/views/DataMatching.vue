@@ -227,7 +227,7 @@ export default {
   data() {
     return {
       showDebug: process.env.NODE_ENV === 'development',
-      currentSharePointSortKey: 's9DWINEntryDate', // State ภายใน Vue component เพื่อผูกกับ v-model (SharePoint)
+      currentSharePointSortKey: 's9DWINEntryDate',
     }
   },
   computed: {
@@ -243,14 +243,14 @@ export default {
       'unmatchedSharePointData',
       'loading',
       'error',
-      'displaySharePointData',
+      'displaySharePointData',  // เก็บไว้ - อย่าลบ
       'sharePointSortConfig',
       'azureSortConfig',
     ]),
 
     safeSharePointData() { return this.displaySharePointData || []; },
     safeMatchedPairs() { return this.flatMatchedPairs || []; },
-    safeSimilarItems() { return this.similarItems || []; }, // 
+    safeSimilarItems() { return this.similarItems || []; },
     safeTopSimilarItems() { return this.topSimilarItems || []; },
 
     safeDisplayedSimilarItems() {
@@ -260,22 +260,17 @@ export default {
       const currentGroup = this.$store.state.dataMatching.matchedGroups[this.selectedSharePointItem.id];
       const matchedRowKeys = currentGroup ? currentGroup.matchedCustomers.map(m => m.RowKey) : [];
 
-      console.log('🔍 Matched RowKeys:', matchedRowKeys); // Debug log
-
       const filtered = items.filter(item => {
         const rowKey = item.RowKey || item.rowKey;
         const isMatched = matchedRowKeys.includes(rowKey);
-        console.log(`Item ${rowKey}: isMatched = ${isMatched}`); // Debug log
         return !isMatched;
       });
 
-      console.log(`📊 Showing ${filtered.length} of ${items.length} items`); // Debug log
       return filtered;
     }
   },
 
   watch: {
-    // Sync internal state with Vuex getter for SharePoint Sort
     'sharePointSortConfig.key': {
       immediate: true,
       handler(newKey) {
@@ -286,23 +281,19 @@ export default {
     }
   },
 
-  // async created() {
-  //   await this.initializeData()
-  // },
-
   methods: {
     ...mapActions('dataMatching', [
       'loadSharePointData',
       'loadAzureTableData',
       'selectSharePointItem',
       'matchItems',
-      'unmatchItems', // มีการส่ง azureRowKey
+      'unmatchItems',
       'showAllSimilarItems',
       'hideAllSimilarItems',
       'clearAllMatches',
       'resetState',
-      'setSharePointSort', // Action สำหรับ sorting SharePoint
-      'setAzureSort', // Action สำหรับ sorting Azure (ใช้ใน AzureFullTable)
+      'setSharePointSort',
+      'setAzureSort',
     ]),
 
     async initializeData() {
@@ -322,7 +313,7 @@ export default {
       this.matchItems({ sharePointItem, azureItem, similarity });
     },
 
-    handleUnmatch(sharepointId, azureRowKey) { // รับ azureRowKey
+    handleUnmatch(sharepointId, azureRowKey) {
       this.unmatchItems({ sharepointId, azureRowKey });
     },
 
@@ -350,16 +341,16 @@ export default {
         .filter(pair => pair.sharepoint?.id === sharePointId)
         .map(pair => ({
           ...pair.azure,
-          calculatedRevenue: pair.calculatedRevenue, // Ensure calculatedRevenue is passed through
+          calculatedRevenue: pair.calculatedRevenue,
           similarityScore: pair.azure.similarityScore,
           RowKey: pair.azure.RowKey
         }));
     },
 
-    isItemMatched(sharePointId, azureRowKey) { // รับ azureRowKey แทน azureId
+    isItemMatched(sharePointId, azureRowKey) {
       if (!sharePointId || !azureRowKey) return false;
       return this.safeMatchedPairs.some(pair =>
-        pair.sharepoint?.id === sharePointId && pair.azure?.RowKey === azureRowKey // ตรวจสอบด้วย azure.RowKey
+        pair.sharepoint?.id === sharePointId && pair.azure?.RowKey === azureRowKey
       )
     },
 
@@ -373,7 +364,7 @@ export default {
     },
 
     formatCurrency(value) {
-      if (value === null || value === undefined || isNaN(value)) return 'N/A'; // ดักจับ NaN ด้วย
+      if (value === null || value === undefined || isNaN(value)) return 'N/A';
       if (value === 0) return '0';
       return new Intl.NumberFormat('th-TH', {
         style: 'currency',
@@ -382,6 +373,7 @@ export default {
         maximumFractionDigits: 0
       }).format(value);
     },
+
     async logout() {
       try {
         await this.$store.dispatch('auth/logout');
@@ -393,15 +385,14 @@ export default {
       }
     },
 
-    // --- เพิ่ม Methods สำหรับ Sorting SharePoint Data ---
     changeSharePointSort() {
       this.setSharePointSort({ key: this.currentSharePointSortKey });
     },
+    
     toggleSharePointSortDirection() {
       const newDirection = this.sharePointSortConfig.direction === 'asc' ? 'desc' : 'asc';
       this.setSharePointSort({ key: this.sharePointSortConfig.key, direction: newDirection });
     },
-    // --- สิ้นสุด Methods สำหรับ Sorting SharePoint Data ---
   }
 }
 </script>

@@ -1,55 +1,36 @@
-import axios from "axios";
-// 1. นำเข้าฟังก์ชัน transformPersonnelInfo จากไฟล์ที่คุณสร้าง
+// services/azureService.js
 import { transformPersonnelInfo } from "../services/personnelMapping.js";
+import { createApiClient } from "../utils/apiClient";
 
 class AzureService {
   constructor() {
     this.baseURL = "http://localhost:7204/api";
-    this.apiClient = axios.create({
+    
+    // ✅ ใช้ createApiClient จาก utils แทน axios.create
+    this.apiClient = createApiClient({
       baseURL: this.baseURL,
-      timeout: 30000,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      timeout: 30000
     });
 
-    // Request interceptor to add auth token
+    // ✅ เพิ่ม request interceptor เฉพาะ token injection
     this.apiClient.interceptors.request.use(
       (config) => {
         const token = this.getStoredToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
-        console.log(
-          `🔄 Azure API Request: ${config.method?.toUpperCase()} ${config.url}`
-        );
         return config;
       },
-      (error) => {
-        console.error("❌ Request interceptor error:", error);
-        return Promise.reject(error);
-      }
+      (error) => Promise.reject(error)
     );
 
-    // Response interceptor for error handling
+    // ✅ เพิ่ม response interceptor เฉพาะ 401 redirect
     this.apiClient.interceptors.response.use(
-      (response) => {
-        console.log(
-          `✅ Azure API Response: ${response.status} ${response.config.url}`
-        );
-        return response;
-      },
+      (response) => response,
       (error) => {
-        console.error(
-          `❌ Azure API Error: ${error.response?.status} ${error.config?.url}`,
-          error
-        );
-
         if (error.response?.status === 401) {
           window.location.href = "/login";
         }
-
         return Promise.reject(error);
       }
     );
@@ -90,20 +71,17 @@ class AzureService {
 
   async getAzureTableData(accessToken) {
     const columnsToSelect = [
-      // Keys and essential fields
       "systemRowVersion",
       "documentNo",
       "lineNo",
       "PartitionKey",
       "RowKey",
       "Timestamp",
-
-      // Fields for display in AzureFullTable.vue and comparison logic
-      "selltoCustName_SalesHeader", // Used as the main customer name
+      "selltoCustName_SalesHeader",
       "shortName",
       "salespersonDimName",
       "custAppDimName",
-      "regionDimName3", // For 'country' mapping
+      "regionDimName3",
       "productGroup",
       "pCode",
       "chipName",
@@ -116,9 +94,9 @@ class AzureService {
       "currencyRate",
       "salesPerUnit",
       "totalSales",
-      "no", // Not a standard name, but could be important
+      "no",
       "description",
-      "itemReferenceNo", // Important for similarity calculation
+      "itemReferenceNo",
     ];
 
     try {
@@ -154,14 +132,12 @@ class AzureService {
         console.error("Error details:", error.response.data);
       }
       console.log("🧪 Using mock Azure Table data for development");
-      // การใช้ Mock data จะยังคงทำงานได้เหมือนเดิมหาก API call ล้มเหลว
       return this.getMockAzureData(); 
     }
   }
 
   processCustomerData(rawData) {
     return rawData.map((item) => {
-      // 2. ทำการแปลงค่าในฟิลด์ที่ต้องการโดยใช้ฟังก์ชันที่ import มา
       const transformedSalesperson = transformPersonnelInfo(
         item.salespersonDimName
       );
@@ -172,32 +148,18 @@ class AzureService {
         item.custAppDimName
       );
 
-      // 3. สร้าง object ใหม่โดยใช้ค่าที่แปลงแล้ว
-      //    และจัดโครงสร้างข้อมูลให้พร้อมสำหรับฟังก์ชัน calculateSimilarity
       const finalItem = {
-        // ...เก็บฟิลด์เดิมทั้งหมดจาก item...
         ...item,
-
-        // --- เขียนทับฟิลด์ที่ต้องการด้วยค่าที่แปลงแล้ว ---
         salespersonDimName: transformedSalesperson,
         selltoCustName_SalesHeader: transformedSellToCustomerName,
         custAppDimName: transformedCustomerAppName,
-
-        // --- สร้างฟิลด์มาตรฐานสำหรับฟังก์ชัน calculateSimilarity ---
-        // ฟังก์ชัน calculateSimilarity จะมองหา 'name', 'email', 'company', 'country', 'industry'
-        // เราจึงสร้างฟิลด์เหล่านี้ขึ้นมาโดยใช้ข้อมูลที่เหมาะสมที่สุด
-        name: transformedSellToCustomerName, // ใช้ชื่อลูกค้าที่แปลงแล้วเป็น 'name' หลัก
-        customerName: transformedSellToCustomerName, // ใช้เป็น 'customerName' ด้วยเพื่อความเข้ากันได้
-
-        // ตัวอย่างการดึงอีเมลออกจาก 'salesperson' (ถ้าจำเป็น)
-        email: this.extractEmail(transformedSalesperson), // ฟังก์ชัน helper สำหรับดึงอีเมล
+        name: transformedSellToCustomerName,
+        customerName: transformedSellToCustomerName,
+        email: this.extractEmail(transformedSalesperson),
         customerEmail: this.extractEmail(transformedSalesperson),
-
-        company: transformedSellToCustomerName, // สมมติว่าชื่อลูกค้าคือชื่อบริษัท
-        country: item.regionDimName3 || "", // สมมติว่า regionDimName3 คือประเทศ
-        industry: item.custAppDimName || "", // สมมติว่า custAppDimName คือ industry
-
-        // Uniqe key (เหมือนเดิม)
+        company: transformedSellToCustomerName,
+        country: item.regionDimName3 || "",
+        industry: item.custAppDimName || "",
         id:
           item.systemRowVersion ||
           `${item.documentNo}_${item.lineNo}` ||
@@ -211,7 +173,7 @@ class AzureService {
   extractEmail(transformedString) {
     if (!transformedString || typeof transformedString !== "string") return "";
     const match = transformedString.match(/\(([^)]+)\)/);
-    return match ? match[1] : ""; // ถ้าเจอวงเล็บ, return สิ่งที่อยู่ในวงเล็บ (อีเมล)
+    return match ? match[1] : "";
   }
 
   async updateMergedData(payload) {
@@ -262,8 +224,6 @@ class AzureService {
       }
     } catch (error) {
       console.error("❌ Failed to fetch SharePoint opportunities:", error);
-
-      // Fallback to mock data for development
       console.log("🧪 Using mock SharePoint opportunities for development");
       return this.getMockSharePointOpportunities();
     }
@@ -289,8 +249,6 @@ class AzureService {
       }
     } catch (error) {
       console.error("❌ Failed to fetch SharePoint contacts:", error);
-
-      // Fallback to mock data for development
       console.log("🧪 Using mock SharePoint contacts for development");
       return this.getMockSharePointContacts();
     }
