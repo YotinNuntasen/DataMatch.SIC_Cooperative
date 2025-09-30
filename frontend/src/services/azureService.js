@@ -5,35 +5,11 @@ import { createApiClient } from "../utils/apiClient";
 class AzureService {
   constructor() {
     this.baseURL = "http://localhost:7204/api";
-    
-    // ✅ ใช้ createApiClient จาก utils แทน axios.create
+
     this.apiClient = createApiClient({
       baseURL: this.baseURL,
-      timeout: 30000
+      timeout: 30000,
     });
-
-    // ✅ เพิ่ม request interceptor เฉพาะ token injection
-    this.apiClient.interceptors.request.use(
-      (config) => {
-        const token = this.getStoredToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    // ✅ เพิ่ม response interceptor เฉพาะ 401 redirect
-    this.apiClient.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          window.location.href = "/login";
-        }
-        return Promise.reject(error);
-      }
-    );
   }
 
   getStoredToken() {
@@ -75,7 +51,7 @@ class AzureService {
       "documentNo",
       "lineNo",
       "PartitionKey",
-      "RowKey",
+      "RowKey", // ➡️ จะใช้ RowKey นี้เป็นตัวระบุใน PersonDocument
       "Timestamp",
       "selltoCustName_SalesHeader",
       "shortName",
@@ -104,8 +80,8 @@ class AzureService {
       const response = await this.apiClient.get("/customer-data/source", {
         headers: { Authorization: `Bearer ${accessToken}` },
         params: {
-          select: columnsToSelect.join(',')
-        }
+          select: columnsToSelect.join(","),
+        },
       });
 
       if (
@@ -132,7 +108,7 @@ class AzureService {
         console.error("Error details:", error.response.data);
       }
       console.log("🧪 Using mock Azure Table data for development");
-      return this.getMockAzureData(); 
+      return this.getMockAzureData(); // ตรวจสอบว่า getMockAzureData มีข้อมูล RowKey ที่ถูกต้อง
     }
   }
 
@@ -160,10 +136,8 @@ class AzureService {
         company: transformedSellToCustomerName,
         country: item.regionDimName3 || "",
         industry: item.custAppDimName || "",
-        id:
-          item.systemRowVersion ||
-          `${item.documentNo}_${item.lineNo}` ||
-          crypto.randomUUID(),
+        // ➡️ ใช้ item.RowKey เป็น ID หลักของ Azure Item
+        id: item.RowKey || crypto.randomUUID(),
       };
 
       return finalItem;
@@ -179,19 +153,67 @@ class AzureService {
   async updateMergedData(payload) {
     try {
       console.log("📤 Sending data to update/create in merged table...");
+      // ➡️ ใช้ apiClient.post โดยตรง
+      const accessToken = this.getStoredToken(); // ดึง token มาใช้
       const response = await this.apiClient.post(
-        "/customer-data/merged",
-        payload
+        "/customer-data/merged", // API endpoint สำหรับ bulk upsert PersonDocument
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
-      return response.data;
+      // ➡️ ตรวจสอบโครงสร้าง response ที่ถูกต้อง
+      if (response.data && response.data.success) {
+        console.log("✅ Merged data updated successfully:", response.data);
+        return response.data;
+      } else {
+        throw new Error(
+          response.data?.message || "Failed to update merged data on backend."
+        );
+      }
     } catch (error) {
       console.error("❌ Failed to update merged data:", error);
 
       throw new Error(
-        error.response?.data?.message ||
+        error.response?.data?.Message ||
           error.response?.data?.error ||
           "Failed to update data."
+      );
+    }
+  }
+  async deleteMergedDocument(azureRowKey) {
+    try {
+      console.log(`🗑️ Deleting merged document with RowKey: ${azureRowKey}`);
+      const accessToken = this.getStoredToken();
+      const response = await this.apiClient.delete(
+        `/customer-data/merged/${azureRowKey}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.data && response.data.success) {
+        console.log(`✅ Merged document ${azureRowKey} deleted successfully.`);
+        return response.data;
+      } else {
+        throw new Error(
+          response.data?.message ||
+            `Failed to delete merged document ${azureRowKey} from backend.`
+        );
+      }
+    } catch (error) {
+      console.error(
+        `❌ Failed to delete merged document ${azureRowKey}:`,
+        error
+      );
+      throw new Error(
+        error.response?.data?.Message || "Failed to delete merged document."
       );
     }
   }
@@ -339,6 +361,47 @@ class AzureService {
       author: item.Author?.Title || "Unknown",
       editor: item.Editor?.Title || "Unknown",
     }));
+  }
+  async getPreviouslyMergedData() {
+    try {
+      console.log("🔄 Fetching previously merged data from backend...");
+
+      const accessToken = this.getStoredToken();
+      if (!accessToken) {
+        console.warn(
+          "No access token found, cannot fetch previously merged data."
+        );
+        // ควรจะ return [] หรือ throw error แล้วแต่ว่าคุณต้องการให้ handle อย่างไร
+        // การ return [] ทำให้ initializeDataAndMatches ทำงานต่อได้
+        return [];
+      }
+
+      const response = await this.apiClient.get("/customer-data/merged", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (
+        response.data &&
+        response.data.success &&
+        Array.isArray(response.data.data)
+      ) {
+        console.log(
+          `✅ Fetched ${response.data.data.length} previously merged records.`
+        );
+        return response.data.data; // ➡️ คืนค่า Array ของ PersonDocument
+      } else {
+        throw new Error(
+          response.data?.message ||
+            "Invalid response when fetching merged data."
+        );
+      }
+    } catch (error) {
+      console.error("❌ Failed to fetch previously merged data:", error);
+      // ในกรณีที่เกิดข้อผิดพลาด ให้คืนค่าเป็น Array ว่าง เพื่อป้องกันไม่ให้ application crash
+      return [];
+    }
   }
 }
 

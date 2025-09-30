@@ -1,3 +1,4 @@
+// IDataService.cs
 using DataMatchBackend.Models;
 
 namespace DataMatchBackend.Services;
@@ -17,15 +18,16 @@ public interface IDataService
     // PersonDocument Operations (merged table)
     Task<List<PersonDocument>> GetAllPersonDocumentsAsync();
     Task<PersonDocument?> GetPersonDocumentAsync(string id);
+    Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId); // ✅ เพิ่มเมธอดนี้
     Task<List<PersonDocument>> SearchPersonDocumentsAsync(SearchCriteria criteria);
     Task<PersonDocument> CreatePersonDocumentAsync(PersonDocument person);
     Task<PersonDocument> UpdatePersonDocumentAsync(PersonDocument person);
     Task<bool> DeletePersonDocumentAsync(string id);
-    Task<List<PersonDocument>> BulkUpdatePersonDocumentsAsync(List<PersonDocument> persons); 
+    Task<List<PersonDocument>> BulkUpdatePersonDocumentsAsync(List<PersonDocument> persons);
     Task<List<PersonDocument>> GetRecentlyModifiedRecordsAsync(int days = 30);
 
     // Match Operations
-     Task<List<MatchRecord>> GetMatchHistoryAsync();
+    Task<List<MatchRecord>> GetMatchHistoryAsync();
     Task<MatchRecord> SaveMatchAsync(MatchedRecord matchedRecord);
     Task<List<MatchRecord>> GetMatchesByStatusAsync(string status);
     Task<MatchRecord> UpdateMatchStatusAsync(string matchId, string status, string approvedBy = "");
@@ -40,5 +42,4 @@ public interface IDataService
     Task<bool> IsHealthyAsync();
     Task<Dictionary<string, object>> GetHealthDetailsAsync();
     Task<bool> CreateBackupAsync(string backupName);
-    
 }

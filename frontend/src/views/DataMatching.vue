@@ -105,7 +105,8 @@
 
             <div v-if="displaySharePointData.length === 0" class="empty-mail-list">
               <p>No SharePoint opportunities available</p>
-              <button @click="loadData" class="reload-btn">Reload Data</button>
+              <!-- ปุ่มโหลดข้อมูลตรงนี้จะถูกแก้ไขให้เรียก initializeDataAndMatches -->
+              <button @click="initializeDataAndMatches" class="reload-btn">Reload Data</button>
             </div>
           </div>
         </div>
@@ -262,7 +263,9 @@ export default {
 
       const filtered = items.filter(item => {
         const rowKey = item.RowKey || item.rowKey;
+        // ตรวจสอบว่า item นี้ถูกจับคู่แล้วในกลุ่มปัจจุบันหรือไม่
         const isMatched = matchedRowKeys.includes(rowKey);
+        // คืนค่าเป็น true ถ้า item ยังไม่ถูกจับคู่
         return !isMatched;
       });
 
@@ -280,11 +283,17 @@ export default {
       }
     }
   },
+  
+  async created() {
+    
+    await this.initializeDataAndMatches();
+  },
 
   methods: {
     ...mapActions('dataMatching', [
-      'loadSharePointData',
-      'loadAzureTableData',
+      'loadSharePointData', 
+      'loadAzureTableData', 
+      'initializeDataAndMatches', 
       'selectSharePointItem',
       'matchItems',
       'unmatchItems',
@@ -296,13 +305,19 @@ export default {
       'setAzureSort',
     ]),
 
-    async initializeData() {
-      try {
-        await Promise.all([this.loadSharePointData(), this.loadAzureTableData()]);
-      } catch (error) {
-        console.error('Failed to initialize data:', error);
-      }
-    },
+    // ไม่จำเป็นต้องมี async initializeData() แล้ว เพราะ initializeDataAndMatches จะทำงานนั้น
+    // async initializeData() {
+    //   try {
+    //     await Promise.all([this.loadSharePointData(), this.loadAzureTableData()]);
+    //   } catch (error) {
+    //     console.error('Failed to initialize data:', error);
+    //   }
+    // },
+
+    // ไม่จำเป็นต้องมี async loadData() แล้ว
+    // async loadData() {
+    //   await this.initializeData();
+    // },
 
     selectItem(item) {
       if (!item) return;
@@ -322,10 +337,6 @@ export default {
 
     goToResults() {
       if (this.safeMatchedPairs.length > 0) this.$router.push('/results');
-    },
-
-    async loadData() {
-      await this.initializeData();
     },
 
     hasMatches(sharePointId) {
@@ -416,6 +427,7 @@ export default {
   background: linear-gradient(135deg, #d0d9ff 0%, #9b48ee 100%);
   padding: 10px 20px;
   box-shadow: 0 2px 10px #0000001a;
+  border-radius: 15px;
   flex-shrink: 0;
 }
 

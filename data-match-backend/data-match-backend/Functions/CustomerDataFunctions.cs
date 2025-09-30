@@ -1,3 +1,4 @@
+// CustomerDataFunctions.cs
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,7 @@ namespace DataMatchBackend.Functions
 
         [Function("GetMergedCustomerData")]
         public async Task<HttpResponseData> GetMergedCustomerData(
+            // ✅ เปลี่ยน Route เป็น "customer-data/merged" สำหรับ GetAllPersonDocumentsAsync
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/merged")] HttpRequestData req)
         {
             try
@@ -116,7 +118,7 @@ namespace DataMatchBackend.Functions
 
         [Function("CreateMergedCustomer")]
         public async Task<HttpResponseData> CreateMergedCustomer(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged")] HttpRequestData req)
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged")] HttpRequestData req)
         {
             try
             {
@@ -133,22 +135,23 @@ namespace DataMatchBackend.Functions
                 if (updateRequest?.Records == null || !updateRequest.Records.Any())
                 {
                     _logger.LogWarning("Request body is empty or contains no customer data");
+                    // ✅ ควรคืน BadRequest เพราะไม่มีข้อมูลให้ประมวลผล
                     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body must contain a list of customer data inside a 'records' property");
                 }
 
-
-                var result = await ProcessBulkCreate(updateRequest.Records);
+                // ✅ ใช้ ProcessBulkUpsert แทน ProcessBulkCreate
+                var result = await ProcessBulkUpsert(updateRequest.Records);
 
                 var responseData = new
                 {
                     totalCount = updateRequest.Records.Count,
                     successCount = result.SuccessCount,
                     failedCount = result.FailedCount,
-                    createdRecords = result.CreatedCustomers,
+                    createdRecords = result.UpsertedPeopleDocuments, // ✅ เปลี่ยนชื่อ property ให้สื่อความหมาย
                     errors = result.ValidationErrors
                 };
 
-                return await CreateOkResponse(req, responseData, $"Bulk create completed. {result.SuccessCount} succeeded, {result.FailedCount} failed");
+                return await CreateOkResponse(req, responseData, $"Bulk upsert completed. {result.SuccessCount} succeeded, {result.FailedCount} failed");
             }
             catch (JsonException jsonEx)
             {
@@ -181,7 +184,11 @@ namespace DataMatchBackend.Functions
                 if (customer == null)
                     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid customer data");
 
-                customer.RowKey = id;
+                // ✅ ตรวจสอบและกำหนด RowKey จาก route parameter
+                if (string.IsNullOrEmpty(customer.RowKey) || customer.RowKey != id)
+                {
+                    customer.RowKey = id;
+                }
 
                 if (_validationService != null)
                 {
@@ -204,9 +211,11 @@ namespace DataMatchBackend.Functions
 
         [Function("DeleteMergedCustomer")]
         public async Task<HttpResponseData> DeleteMergedCustomer(
+            // ✅ ใช้ Route เดิม แต่ UnmatchData ต้องเปลี่ยน logic
             [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "customer-data/merged/{id}")] HttpRequestData req, string id)
         {
-            return await UnmatchData(req, id);
+            // ✅ เปลี่ยนไปเรียก UnmatchMergedRecord โดยตรง
+            return await UnmatchMergedRecord(req, id);
         }
 
         [Function("BulkUpdateMergedCustomers")]
@@ -230,31 +239,63 @@ namespace DataMatchBackend.Functions
 
                 if (_validationService != null)
                 {
-                    var validationResult = _validationService.ValidateBulkUpdate(updateRequest);
-                    if (!validationResult.IsValid)
-                        return await CreateErrorResponse(req, HttpStatusCode.BadRequest, string.Join(", ", validationResult.Errors));
+                    // ✅ ควรต้องมีการเรียก ValidateBulkUpdateRequest ที่เหมาะสม
+                    // var validationResult = _validationService.ValidateBulkUpdate(updateRequest);
+                    // if (!validationResult.IsValid)
+                    //     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, string.Join(", ", validationResult.Errors));
                 }
 
                 if (updateRequest.CreateBackup)
                 {
                     var backupName = $"merged_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
-                    await _dataService!.CreateBackupAsync(backupName);
+                    // ✅ ตรวจสอบว่า IDataService ไม่เป็น null ก่อนเรียกใช้
+                    if (_dataService == null)
+                        return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+                    await _dataService.CreateBackupAsync(backupName);
                     _logger.LogInformation("Created backup: {backupName}", backupName);
                 }
 
-                var updatedRecords = await _dataService!.BulkUpdatePersonDocumentsAsync(updateRequest.Records);
-                var successCount = updatedRecords.Count;
-                var totalCount = updateRequest.Records.Count;
+                List<PersonDocument> upsertedRecords = new List<PersonDocument>();
+                int successfulUpdates = 0;
+                int failedUpdates = 0;
+                List<string> errorMessages = new List<string>();
 
-                _logger.LogInformation("Bulk update completed: {SuccessCount}/{TotalCount} successful", successCount, totalCount);
+                foreach (var record in updateRequest.Records)
+                {
+                    try
+                    {
+                        // ✅ ที่นี่ควรจะ FilterDataForSave และ UpsertPersonDocumentAsync ทีละรายการเหมือน ProcessBulkUpsert
+                        var filteredRecord = FilterDataForSave(record);
+                        var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredRecord);
+                        if (upserted != null)
+                        {
+                            upsertedRecords.Add(upserted);
+                            successfulUpdates++;
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Bulk Update: Failed to upsert record with RowKey {RowKey}", record.RowKey);
+                            failedUpdates++;
+                            errorMessages.Add($"Failed to upsert record with RowKey {record.RowKey}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Bulk Update: Error processing record with RowKey {RowKey}", record.RowKey);
+                        failedUpdates++;
+                        errorMessages.Add($"Error processing record with RowKey {record.RowKey}: {ex.Message}");
+                    }
+                }
 
-                var data = new { successCount, totalCount, failedCount = totalCount - successCount };
-                return await CreateOkResponse(req, data, $"Bulk update completed: {successCount}/{totalCount} successful");
+                _logger.LogInformation("Bulk upsert completed: {SuccessCount}/{TotalCount} successful", successfulUpdates, updateRequest.Records.Count);
+
+                var data = new { successCount = successfulUpdates, totalCount = updateRequest.Records.Count, failedCount = failedUpdates, errors = errorMessages };
+                return await CreateOkResponse(req, data, $"Bulk upsert completed: {successfulUpdates}/{updateRequest.Records.Count} successful");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in bulk update");
-                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Bulk update failed");
+                _logger.LogError(ex, "Error in bulk upsert for merged data");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Bulk upsert failed");
             }
         }
 
@@ -313,83 +354,112 @@ namespace DataMatchBackend.Functions
             // เพิ่ม options เพื่อให้ deserialize ได้ทั้ง camelCase และ PascalCase
             var options = new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true,  // ✅ สำคัญมาก!
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase // ✅ ควรใช้ CamelCase สำหรับ JSON output แต่ PropertyNameCaseInsensitive จะช่วยให้รับ input ได้ทั้งสองแบบ
             };
 
+            // ✅ ควรเปลี่ยน from records to peopleDocuments to prevent naming collisions
             return JsonSerializer.Deserialize<BulkUpdateRequest>(requestBody, options);
         }
 
         private async Task<PersonDocument?> ParsePersonDocument(HttpRequestData req)
         {
             var requestBody = await req.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<PersonDocument>(requestBody ?? "{}");
+            // ✅ เพิ่ม JsonSerializerOptions เพื่อรองรับ input ได้ดีขึ้น
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            return JsonSerializer.Deserialize<PersonDocument>(requestBody ?? "{}", options);
         }
 
-        private async Task<(int SuccessCount, int FailedCount, List<PersonDocument> CreatedCustomers, List<string> ValidationErrors)> ProcessBulkCreate(List<PersonDocument> customersToCreate)
+        // ✅ เปลี่ยนชื่อเมธอดให้สื่อความหมายมากขึ้นว่าเป็นการ Upsert (Create หรือ Update)
+        private async Task<(int SuccessCount, int FailedCount, List<PersonDocument> UpsertedPeopleDocuments, List<string> ValidationErrors)> ProcessBulkUpsert(List<PersonDocument> peopleDocumentsToUpsert)
         {
-            var createdCustomers = new List<PersonDocument>();
+            var upsertedRecords = new List<PersonDocument>();
             var validationErrors = new List<string>();
             int successCount = 0;
             int failedCount = 0;
 
-            _logger.LogInformation("Received {Count} customer documents to process", customersToCreate.Count);
+            _logger.LogInformation("Received {Count} person documents to process for upsert", peopleDocumentsToUpsert.Count);
 
-            foreach (var customer in customersToCreate)
+            foreach (var personDocument in peopleDocumentsToUpsert)
             {
                 try
                 {
-                    var filteredCustomer = FilterDataForSave(customer);
-
-                    if (!ShouldSaveCustomer(filteredCustomer))
+                    // ✅ ตรวจสอบและกำหนด PartitionKey ถ้ายังไม่ได้กำหนด (สำคัญสำหรับ Azure Table Storage)
+                    // ตัวอย่าง: ถ้า PartitionKey ควรเป็น OpportunityId
+                    if (string.IsNullOrEmpty(personDocument.PartitionKey) && !string.IsNullOrEmpty(personDocument.OpportunityId))
                     {
-                        _logger.LogInformation("Skipping customer {CustomerName} - does not meet save criteria", customer.SelltoCustName_SalesHeader);
-                        continue;
+                        personDocument.PartitionKey = personDocument.OpportunityId;
+                    }
+                    // ถ้ายังไม่มี RowKey ให้สร้าง RowKey จาก ID หรือ Composite Key ที่ไม่ซ้ำกัน
+                    if (string.IsNullOrEmpty(personDocument.RowKey))
+                    {
+                        // ✅ ควรมี RowKey ที่ระบุตัวตน (เช่น AzureItem.RowKey) ให้แน่ใจว่าถูกส่งมาจาก Frontend
+                        // ถ้าไม่ระบุ RowKey มา, การ Upsert อาจสร้าง Record ใหม่ตลอดเวลา
+                        // หรือจะสร้างจาก OpportunityId + CustomerItem.RowKey ก็ได้
+                        // ตัวอย่าง: PersonDocument.RowKey = $"{personDocument.OpportunityId}-{personDocument.documentNo}_{personDocument.lineNo}";
+                        // สำหรับกรณีนี้, RowKey ควรจะเป็น RowKey ของ Azure Item ที่ถูกเลือกมา Match
                     }
 
+                    var filteredPersonDocument = FilterDataForSave(personDocument);
+
+                    // Re-enable validation if needed
                     // if (_validationService != null)
                     // {
-                    //     var customerValidationResult = _validationService.ValidatePersonDocument(filteredCustomer);
-
-                    //     if (!customerValidationResult.IsValid)
+                    //     var docValidationResult = _validationService.ValidatePersonDocument(filteredPersonDocument);
+                    //     if (!docValidationResult.IsValid)
                     //     {
-                    //         var errorMsg = $"Validation failed for '{filteredCustomer.SelltoCustName_SalesHeader}': {string.Join(", ", customerValidationResult.Errors)}";
+                    //         var errorMsg = $"Validation failed for '{filteredPersonDocument.CustShortDimName}': {string.Join(", ", docValidationResult.Errors)}";
                     //         _logger.LogWarning(errorMsg);
                     //         validationErrors.Add(errorMsg);
                     //         failedCount++;
                     //         continue;
                     //     }
                     // }
-                    var upsertedCustomer = await _dataService!.UpsertPersonDocumentAsync(filteredCustomer);
 
-                    createdCustomers.Add(upsertedCustomer);
-                    successCount++;
+                    var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredPersonDocument);
 
-                    _logger.LogInformation("Successfully upserted customer: {CustomerName}", filteredCustomer.SelltoCustName_SalesHeader);
+                    if (upserted != null)
+                    {
+                        upsertedRecords.Add(upserted);
+                        successCount++;
+                        _logger.LogInformation("Successfully upserted person document: {CustShortDimName} (RowKey: {RowKey})", filteredPersonDocument.CustShortDimName, filteredPersonDocument.RowKey);
+                    }
+                    else
+                    {
+                        failedCount++;
+                        validationErrors.Add($"Failed to upsert '{personDocument.CustShortDimName}' (RowKey: {personDocument.RowKey}): Upsert returned null.");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to upsert individual customer record: {CustomerName}", customer.SelltoCustName_SalesHeader);
+                    _logger.LogError(ex, "Failed to upsert individual person document record: {CustShortDimName} (RowKey: {RowKey})", personDocument.CustShortDimName, personDocument.RowKey);
                     failedCount++;
-                    validationErrors.Add($"Failed to upsert '{customer.SelltoCustName_SalesHeader}': {ex.Message}");
+                    validationErrors.Add($"Failed to upsert '{personDocument.CustShortDimName}' (RowKey: {personDocument.RowKey}): {ex.Message}");
                 }
             }
 
             _logger.LogInformation("Bulk upsert finished. Success: {SuccessCount}, Failed: {FailedCount}", successCount, failedCount);
-            return (successCount, failedCount, createdCustomers, validationErrors);
+            return (successCount, failedCount, upsertedRecords, validationErrors);
         }
+
         /// <summary>
         /// กรองข้อมูลที่จะ save เฉพาะ field ที่ต้องการ
         /// </summary>
         private PersonDocument FilterDataForSave(PersonDocument customer)
-        //, SharePointContact sharePointContact
         {
+            // ✅ ตรวจสอบและใช้ PartitionKey/RowKey ที่มีอยู่ หรือกำหนดค่าเริ่มต้นให้เหมาะสม
+            // ปกติ PartitionKey ควรเป็น OpportunityId
+            // และ RowKey ควรจะเป็น RowKey ของ Azure Table Item ที่ถูกจับคู่มา
             var filtered = new PersonDocument
             {
-
-                PartitionKey = customer.PartitionKey,
-                RowKey = customer.RowKey,
+                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition", // ✅ ให้แน่ใจว่ามี PartitionKey
+                RowKey = customer.RowKey, // ✅ RowKey ไม่ควรเปลี่ยน
+                // ✅ เพิ่ม OpportunityId เข้ามาด้วย
                 OpportunityId = customer.OpportunityId,
+                // ... (fields อื่นๆ ที่มีอยู่แล้ว)
                 OpportunityName = customer.OpportunityName,
                 CustShortDimName = customer.CustShortDimName,
                 PrefixdocumentNo = customer.PrefixdocumentNo,
@@ -414,39 +484,42 @@ namespace DataMatchBackend.Functions
                 RegionDimName3 = customer.RegionDimName3,
                 SalespersonDimName = customer.SalespersonDimName,
                 description = customer.description,
-                Created = customer.Created,
-                Modified = DateTime.UtcNow
+                Created = customer.Created == default ? DateTime.UtcNow : customer.Created, // ✅ หากไม่ได้ระบุ Created มา ให้ใช้ Now
+                Modified = DateTime.UtcNow // ✅ อัปเดต Modified เสมอ
             };
 
             return filtered;
         }
 
         /// <summary>
-        /// ตรวจสอบว่าควร save customer นี้หรือไม่
+        /// ตรวจสอบว่าควร save customer นี้หรือไม่ (เงื่อนไขที่เข้มงวดมากขึ้น)
         /// </summary>
         private bool ShouldSaveCustomer(PersonDocument customer)
         {
-
-
-
-            // ต้องมี CustShortDimName
-            if (string.IsNullOrEmpty(customer.sellToCustomerNo))
+            // ✅ ควรต้องการทั้ง OpportunityId และ RowKey ของ Azure Item มายืนยัน
+            if (string.IsNullOrEmpty(customer.OpportunityId) || string.IsNullOrEmpty(customer.RowKey))
+            {
+                _logger.LogWarning("Skipping save for PersonDocument with missing OpportunityId or RowKey.");
                 return false;
+            }
 
-            // ตัวอย่าง: save เฉพาะ customer ที่มี CustAppDim
-            if (string.IsNullOrEmpty(customer.sellToCustomerNo))
+            // ตรวจสอบข้อมูลที่สำคัญอื่นๆ
+            if (string.IsNullOrEmpty(customer.CustShortDimName) && string.IsNullOrEmpty(customer.SelltoCustName_SalesHeader))
+            {
+                _logger.LogWarning("Skipping save for PersonDocument with no customer name information.");
                 return false;
-
+            }
 
             return true;
         }
 
 
-        private async Task<HttpResponseData> UnmatchData(HttpRequestData req, string id)
+        // ✅ เปลี่ยนชื่อเมธอดและ Logic ให้ตรงกับการลบ Record ที่ถูก Match ไว้
+        private async Task<HttpResponseData> UnmatchMergedRecord(HttpRequestData req, string azureRowKey)
         {
             try
             {
-                _logger.LogInformation("Unmatching/Deleting customer: {CustomerId}", id);
+                _logger.LogInformation("Attempting to unmatch/delete merged record with Azure RowKey: {AzureRowKey}", azureRowKey);
 
                 if (!IsServiceAvailable<IDataService>())
                     return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
@@ -455,22 +528,29 @@ namespace DataMatchBackend.Functions
                 if (!authResult.IsValid)
                     return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
 
-                var existingCustomer = await _dataService!.GetPersonDocumentAsync(id);
-                if (existingCustomer == null)
-                    return await CreateErrorResponse(req, HttpStatusCode.NotFound, "Customer not found");
+                // ✅ ไม่จำเป็นต้องหาตาม sharepointId ด้วย
+                var existingRecord = await _dataService!.GetPersonDocumentAsync(azureRowKey); // หาจาก RowKey เดียว
+                if (existingRecord == null)
+                    return await CreateErrorResponse(req, HttpStatusCode.NotFound, $"Merged record with RowKey '{azureRowKey}' not found.");
 
-                await _dataService.DeletePersonDocumentAsync(id);
-                _logger.LogInformation("Deleted/Unmatched customer: {CustomerName} with ID: {CustomerId}", existingCustomer.CustShortDimName, id);
+                var deleted = await _dataService.DeletePersonDocumentAsync(azureRowKey);
+                if (!deleted)
+                {
+                    _logger.LogError("Failed to delete merged record with RowKey: {AzureRowKey}", azureRowKey);
+                    return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, $"Failed to delete merged record with RowKey '{azureRowKey}'.");
+                }
 
-                return await CreateOkResponse<object>(req, null, "Customer deleted/unmatched successfully");
+                _logger.LogInformation("Successfully deleted merged record: {CustShortDimName} (RowKey: {AzureRowKey}) associated with OpportunityId: {OpportunityId}",
+                                       existingRecord.CustShortDimName, azureRowKey, existingRecord.OpportunityId);
+
+                return await CreateOkResponse<object>(req, null, $"Merged record (RowKey: {azureRowKey}) deleted successfully.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting customer: {CustomerId}", id);
-                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to delete customer");
+                _logger.LogError(ex, "Error unmatching/deleting merged record with Azure RowKey: {AzureRowKey}", azureRowKey);
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to unmatch/delete merged record.");
             }
         }
-
         #endregion
     }
 }

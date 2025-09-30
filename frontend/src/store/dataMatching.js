@@ -71,9 +71,10 @@ function calculateDateRange(s9DWINEntryDate) {
 const state = {
   sharePointData: [],
   azureTableData: [],
+  previouslyMatchedData: [], // ➡️ เก็บข้อมูล PersonDocument ที่โหลดมาจาก backend
   selectedSharePointItem: null,
   similarItems: [],
-  matchedGroups: JSON.parse(localStorage.getItem("matchedGroups")) || {},
+  matchedGroups: {}, // ➡️ ไม่ต้องโหลดจาก localStorage โดยตรงอีก เพราะจะ reconstruct จาก previouslyMatchedData
   showAllSimilar: false,
   loading: false,
   error: null,
@@ -126,8 +127,9 @@ const getters = {
 
         // Handle specific sorting cases for dates and currencies
         if (sortKey.includes("Date")) {
-          valA = valA ? new Date(valA).getTime() : 0;
-          valB = valB ? new Date(valB).getTime() : 0;
+          // ➡️ ปรับปรุงการเปรียบเทียบ Date
+          valA = valA ? new Date(valA).getTime() : -Infinity;
+          valB = valB ? new Date(valB).getTime() : -Infinity;
         } else if (sortKey === "calculatedRevenue") {
           valA = parseFloat(valA || 0);
           valB = parseFloat(valB || 0);
@@ -157,9 +159,10 @@ const getters = {
   flatMatchedPairs: (state) => {
     return Object.values(state.matchedGroups).flatMap((group) =>
       group.matchedCustomers.map((customer) => ({
-        id: `${group.sharePointItem.id}-${customer.RowKey}`,
+        // ➡️ id ควรมาจาก PersonDocument.RowKey ที่บันทึกไว้
+        id: customer.RowKey,
         sharepoint: group.sharePointItem,
-        azure: customer,
+        azure: customer, // ทั้ง PersonDocument ถูกใช้เป็น azure
         calculatedRevenue: customer.calculatedRevenue,
       }))
     );
@@ -199,6 +202,7 @@ const getters = {
     if (!state.selectedSharePointItem) return [];
 
     const currentGroup = state.matchedGroups[state.selectedSharePointItem.id];
+    // ➡️ Azure items ที่จับคู่แล้วจะถูกเก็บใน previouslyMatchedData และถูกกรองออกจาก similarItems
     const matchedAzureRowKeys = currentGroup
       ? currentGroup.matchedCustomers.map((m) => m.RowKey)
       : [];
@@ -215,8 +219,9 @@ const getters = {
         let valA, valB;
 
         if (sortKey === "documentDate") {
-          valA = a[sortKey] ? new Date(a[sortKey]).getTime() : 0;
-          valB = b[sortKey] ? new Date(b[sortKey]).getTime() : 0;
+          // ➡️ ปรับปรุงการเปรียบเทียบ Date
+          valA = a[sortKey] ? new Date(a[sortKey]).getTime() : -Infinity;
+          valB = b[sortKey] ? new Date(b[sortKey]).getTime() : -Infinity;
         } else if (sortKey === "similarity") {
           valA = parseFloat(a[sortKey] || 0);
           valB = parseFloat(b[sortKey] || 0);
@@ -295,6 +300,96 @@ const mutations = {
   SET_LOADING(state, loading) {
     state.loading = loading;
   },
+
+  RECONSTRUCT_MATCHED_GROUPS(state) {
+    const newMatchedGroups = {};
+    const debugInfo = {
+      totalMergedRecords: 0,
+      successfulMatches: 0,
+      failedMatches: 0,
+      missingOpportunityIds: [],
+    };
+
+    if (!Array.isArray(state.previouslyMatchedData)) {
+      console.warn("previouslyMatchedData is not an array");
+      state.previouslyMatchedData = [];
+      return;
+    }
+
+    debugInfo.totalMergedRecords = state.previouslyMatchedData.length;
+
+    console.log("🔄 RECONSTRUCT_MATCHED_GROUPS - Starting...");
+    console.log("📊 Total merged records:", debugInfo.totalMergedRecords);
+    console.log("📊 Total SharePoint items:", state.sharePointData.length);
+
+    state.previouslyMatchedData.forEach((mergedDoc, index) => {
+      // ✅ แก้ไข: ใช้ camelCase (opportunityId) แทน PascalCase (OpportunityId)
+      const spOpportunityId = mergedDoc.opportunityId;
+
+      if (!spOpportunityId) {
+        console.warn(`[${index}] ❌ Missing opportunityId:`, mergedDoc);
+        debugInfo.failedMatches++;
+        return;
+      }
+
+      const sharePointItem = state.sharePointData.find(
+        (sp) => sp.opportunityId === spOpportunityId
+      );
+
+      if (!sharePointItem) {
+        console.warn(
+          `[${index}] ⚠️ SharePoint item not found for opportunityId: "${spOpportunityId}"`
+        );
+        debugInfo.failedMatches++;
+        debugInfo.missingOpportunityIds.push(spOpportunityId);
+        return;
+      }
+
+      // ✅ Found matching SharePoint item
+      if (!newMatchedGroups[sharePointItem.id]) {
+        newMatchedGroups[sharePointItem.id] = {
+          sharePointItem: sharePointItem,
+          matchedCustomers: [],
+        };
+      }
+
+      newMatchedGroups[sharePointItem.id].matchedCustomers.push({
+        ...mergedDoc,
+        similarity: 100,
+        calculatedRevenue: calculateRevenue(mergedDoc),
+      });
+
+      debugInfo.successfulMatches++;
+    });
+
+    state.matchedGroups = newMatchedGroups;
+
+    console.log("=".repeat(60));
+    console.log("📊 RECONSTRUCTION SUMMARY:");
+    console.log(
+      `✅ Successful: ${debugInfo.successfulMatches}/${debugInfo.totalMergedRecords}`
+    );
+    console.log(
+      `❌ Failed: ${debugInfo.failedMatches}/${debugInfo.totalMergedRecords}`
+    );
+    console.log(
+      `📦 Matched Groups: ${Object.keys(state.matchedGroups).length}`
+    );
+
+    if (debugInfo.failedMatches > 0) {
+      console.warn(
+        "⚠️ Missing opportunities:",
+        debugInfo.missingOpportunityIds
+      );
+    }
+    console.log("=".repeat(60));
+
+    localStorage.removeItem("matchedGroups");
+  },
+
+  SET_PREVIOUSLY_MATCHED_DATA(state, data) {
+    state.previouslyMatchedData = Array.isArray(data) ? data : [];
+  },
   SET_ERROR(state, error) {
     state.error = error;
   },
@@ -312,98 +407,76 @@ const mutations = {
   },
 
   ADD_MATCH(state, { sharePointItem, azureItem, similarity }) {
-    const spId = sharePointItem.id;
-    if (!state.matchedGroups[spId]) {
-      state.matchedGroups[spId] = {
-        sharePointItem: sharePointItem,
-        matchedCustomers: [],
-      };
-    }
-
-    const itemRevenue = calculateRevenue(azureItem);
-    const nowISOString = new Date().toISOString();
-
-    const mergedPersonDocument = {
-      PartitionKey: azureItem.PartitionKey || "MergedCustomer",
-      RowKey: azureItem.RowKey || azureItem.rowKey,
-      custShortDimName:
-        azureItem.custShortDimName || sharePointItem.customerName || "",
-      postingDate: normalizeDateToISOString(azureItem.postingDate),
-      prefixdocumentNo: azureItem.prefixdocumentNo || "",
-      selltoCustName_SalesHeader: azureItem.selltoCustName_SalesHeader || "",
-      systemRowVersion: azureItem.systemRowVersion || "",
-      documentDate: normalizeDateToISOString(
-        azureItem.documentDate || sharePointItem.s9DWINEntryDate
-      ),
-      documentNo: azureItem.documentNo || "",
-      itemReferenceNo: azureItem.PCode || sharePointItem.productCode || "",
-      lineNo: azureItem.lineNo || 0,
-      no: azureItem.no || "",
-      quantity: azureItem.quantity || 0,
-      sellToCustomerNo: azureItem.sellToCustomerNo || "",
-      shipmentNo: azureItem.shipmentNo || "",
-      sodocumentNo: azureItem.sodocumentNo || "",
-      srodocumentNo: azureItem.SrodocumentNo || "",
-      description:
-        azureItem.description || sharePointItem.productInterest || "",
-      unitOfMeasure: azureItem.UnitOfMeasure || "",
-      unitPrice: azureItem.unitPrice || 0,
-      lineDiscount: azureItem.LineDiscount || 0,
-      lineAmount: azureItem.lineAmount || 0,
-      currencyCode: azureItem.currencyCode || "",
-      currencyRate: azureItem.currencyRate || 0,
-      salesPerUnit: azureItem.SalesPerUnit || 0,
-      totalSales: azureItem.totalSales || azureItem.TotalSales || 0,
-      podocumentNo: azureItem.PodocumentNo || "",
-      custAppDimName: azureItem.custAppDimName || "",
-      prodChipNameDimName:
-        azureItem.prodChipNameDimName || sharePointItem.productGroup || "",
-      regionDimName3: azureItem.regionDimName3 || "",
-      salespersonDimName:
-        azureItem.SalesName || sharePointItem.customerNameSalePersonCode || "",
-      "opportunity ID": sharePointItem.opportunityId || "",
-      calculatedRevenue: itemRevenue,
-      revenueCalculationTimestamp: nowISOString,
-      // created: normalizeDateToISOString(sharePointItem.created),
-      modified: nowISOString,
-      matchedDate: nowISOString,
-      id: azureItem.RowKey || azureItem.id,
+  const spId = sharePointItem.id;
+  if (!state.matchedGroups[spId]) {
+    state.matchedGroups[spId] = {
+      sharePointItem: sharePointItem,
+      matchedCustomers: [],
     };
+  }
 
-    if (!mergedPersonDocument.RowKey || mergedPersonDocument.RowKey === "-") {
-      console.error(
-        "Generated PersonDocument has invalid RowKey:",
-        mergedPersonDocument
-      );
-      alert("Error: Cannot match item due to invalid RowKey generation.");
-      return;
-    }
+  const itemRevenue = calculateRevenue(azureItem);
+  const nowISOString = new Date().toISOString();
 
-    if (
-      !state.matchedGroups[spId].matchedCustomers.some(
-        (c) => c.RowKey === mergedPersonDocument.RowKey
-      )
-    ) {
-      state.matchedGroups[spId].matchedCustomers.push({
-        ...mergedPersonDocument,
-        similarity: similarity,
-      });
+  const mergedPersonDocument = {
+    PartitionKey: sharePointItem.opportunityId,
+    RowKey: azureItem.RowKey || azureItem.id,
+    
+    opportunityId: sharePointItem.opportunityId,
+    opportunityName: sharePointItem.title || sharePointItem.opportunityName,
+    custShortDimName: azureItem.custShortDimName,
+    prefixdocumentNo: azureItem.prefixdocumentNo,
+    selltoCustName_SalesHeader: azureItem.selltoCustName_SalesHeader,
+    systemRowVersion: azureItem.systemRowVersion,
+    documentDate: normalizeDateToISOString(azureItem.documentDate),
+    documentNo: azureItem.documentNo,
+    itemReferenceNo: azureItem.itemReferenceNo,
+    lineNo: azureItem.lineNo,
+    no: azureItem.no,
+    quantity: azureItem.quantity,
+    sellToCustomerNo: azureItem.sellToCustomerNo,
+    shipmentNo: azureItem.shipmentNo,
+    sodocumentNo: azureItem.sodocumentNo,
+    description: azureItem.description,
+    unitPrice: azureItem.unitPrice,
+    lineDiscount: azureItem.lineDiscount,
+    lineAmount: azureItem.lineAmount,
+    currencyRate: parseFloat(azureItem.currencyRate || 0),
+    salesPerUnit: azureItem.salesPerUnit,
+    totalSales: azureItem.totalSales,
+    custAppDimName: azureItem.custAppDimName,
+    prodChipNameDimName: azureItem.prodChipNameDimName,
+    regionDimName3: azureItem.regionDimName3,
+    salespersonDimName: azureItem.salespersonDimName,
+    
+    calculatedRevenue: itemRevenue,
+    modified: nowISOString,
+    matchedDate: nowISOString,
+    status: "Matched",
+  };
 
-      console.log(
-        `✅ Added match: SP Item ${spId} with Azure Item (RowKey: ${
-          mergedPersonDocument.RowKey
-        }), Revenue: $${itemRevenue.toFixed(2)}`
-      );
-    } else {
-      console.warn(
-        `⚠️ Attempted to add duplicate match (RowKey: ${mergedPersonDocument.RowKey}) for SP Item ${spId}.`
-      );
-    }
-    localStorage.setItem("matchedGroups", JSON.stringify(state.matchedGroups));
-    console.log("MatchedGroups after ADD_MATCH:", state.matchedGroups);
-  },
+  if (!mergedPersonDocument.PartitionKey || !mergedPersonDocument.RowKey) {
+    console.error("Invalid PartitionKey or RowKey:", mergedPersonDocument);
+    alert("Error: Cannot match item due to invalid key generation.");
+    return;
+  }
 
-  // Mutation สำหรับการ Unmatch
+  if (!state.matchedGroups[spId].matchedCustomers.some(
+    (c) => c.RowKey === mergedPersonDocument.RowKey
+  )) {
+    state.matchedGroups[spId].matchedCustomers.push({
+      ...mergedPersonDocument,
+      similarity: similarity,
+    });
+
+    console.log(`✅ Added match: ${spId} with RowKey: ${mergedPersonDocument.RowKey}`);
+    actions.saveMatchedGroupsToBackend({ state }, [mergedPersonDocument]);
+  } else {
+    console.warn(`⚠️ Duplicate match attempt (RowKey: ${mergedPersonDocument.RowKey})`);
+  }
+},
+
+  //Unmatch Logic
   REMOVE_MATCH(state, { sharepointId, azureRowKey }) {
     if (state.matchedGroups[sharepointId]) {
       const removedItems = state.matchedGroups[
@@ -413,9 +486,9 @@ const mutations = {
         const removedRevenue = removedItems.reduce(
           (sum, item) => sum + (item.calculatedRevenue || 0),
           0
-        ); // ใช้ item.calculatedRevenue
+        );
         console.log(
-          `Removed match: Revenue lost: $${removedRevenue.toFixed(2)}`
+          `Removed match locally: Revenue lost: $${removedRevenue.toFixed(2)}`
         );
       }
 
@@ -426,121 +499,94 @@ const mutations = {
       if (state.matchedGroups[sharepointId].matchedCustomers.length === 0) {
         delete state.matchedGroups[sharepointId];
       }
+
+      // ➡️ ลบข้อมูลออกจาก Backend โดยใช้ azureRowKey
+      actions.deleteMatchedRecordFromBackend(null, azureRowKey);
     }
-    localStorage.setItem("matchedGroups", JSON.stringify(state.matchedGroups));
+    // ➡️ ไม่ต้องเก็บใน localStorage.matchedGroups อีกต่อไป
+    // localStorage.setItem("matchedGroups", JSON.stringify(state.matchedGroups));
     console.log("MatchedGroups after REMOVE_MATCH:", state.matchedGroups);
   },
 
   CLEAR_ALL_MATCHES(state) {
     state.matchedGroups = {};
-    localStorage.removeItem("matchedGroups");
-    console.log("All matches cleared");
+    // ➡️ ไม่ต้องลบ localStorage.matchedGroups อีกต่อไป
+    // localStorage.removeItem("matchedGroups");
+    console.log(
+      "All matches cleared from local state. (Backend not affected by this action)"
+    );
+    // ➡️ หากต้องการให้ Clear ALL Match จาก Backend ด้วย ต้องเรียก API ทุก item
+    // dispatch('clearAllMatchesFromBackend');
   },
 
-  // --- ปรับปรุง RESET_STATE ให้รีเซ็ต sorting ด้วย ---
   RESET_STATE(state) {
     state.sharePointData = [];
     state.azureTableData = [];
     state.selectedSharePointItem = null;
     state.similarItems = [];
-    state.matchedGroups = {}; // Clear matchedGroups on reset
+    state.previouslyMatchedData = [];
+    state.matchedGroups = {};
     state.showAllSimilar = false;
     state.loading = false;
     state.error = null;
-    // Reset sorting states
     state.sharePointSortKey = "s9DWINEntryDate";
     state.sharePointSortDirection = "desc";
     state.azureSortKey = "similarity";
     state.azureSortDirection = "desc";
-    localStorage.removeItem("matchedGroups");
+    // ➡️ ไม่ต้องลบ localStorage.matchedGroups อีกต่อไป
+    // localStorage.removeItem("matchedGroups");
   },
 };
 
 const actions = {
-  async loadSharePointData({ commit }) {
+  async initializeDataAndMatches({ dispatch, commit, state }) {
     commit("SET_LOADING", true);
     commit("SET_ERROR", null);
     try {
-      const rawData = await sharepointService.getSharePointData();
+      await Promise.all([
+        dispatch("loadSharePointData"),
+        dispatch("loadAzureTableData"),
+      ]);
 
-      if (!Array.isArray(rawData)) {
-        throw new Error(
-          "Received data is not an array from SharePoint service."
-        );
-      }
+      const mergedData = await azureService.getPreviouslyMergedData();
+      commit("SET_PREVIOUSLY_MATCHED_DATA", mergedData);
 
-      const filteredData = rawData.filter((item) => {
-        return item.pipelineStage == "Design-Win";
-      });
-
-      console.log(
-        `SharePoint: Fetched ${rawData.length} records, filtered down to ${filteredData.length} records with a pipelineStage.`
-      );
-
-      commit("SET_SHAREPOINT_DATA", filteredData);
+      commit("RECONSTRUCT_MATCHED_GROUPS");
     } catch (error) {
-      console.error("Failed to load and filter SharePoint Data:", error);
-      commit("SET_ERROR", `SharePoint Load Failed: ${error.message}`);
-      commit("SET_SHAREPOINT_DATA", []);
+      console.error("Data initialization failed:", error);
+      commit("SET_ERROR", `Failed to initialize data: ${error.message}`);
     } finally {
       commit("SET_LOADING", false);
     }
   },
 
-  async sendMatchedGroupsToBackend({ state }) {
-    const sanitizedRecords = Object.values(state.matchedGroups).flatMap(
-      (group) =>
-        group.matchedCustomers.map((customer) => ({
-          PartitionKey: customer.PartitionKey,
-          RowKey: customer.RowKey,
-          OpportunityId: customer.OpportunityId,
-          CustShortDimName: customer.custShortDimName,
-          PostingDate: normalizeDateToISOString(customer.postingDate),
-          PrefixdocumentNo: customer.prefixdocumentNo,
-          SelltoCustName_SalesHeader: customer.selltoCustName_SalesHeader,
-          SystemRowVersion: customer.systemRowVersion,
-          DocumentDate: normalizeDateToISOString(customer.documentDate),
-          documentNo: customer.documentNo,
-          itemReferenceNo: customer.itemReferenceNo,
-          lineNo: customer.lineNo,
-          no: customer.no,
-          quantity: customer.quantity,
-          sellToCustomerNo: customer.sellToCustomerNo,
-          shipmentNo: customer.shipmentNo,
-          sodocumentNo: customer.sodocumentNo,
-          SrodocumentNo: customer.srodocumentNo,
-          description: customer.description,
-          UnitOfMeasure: customer.unitOfMeasure,
-          unitPrice: customer.unitPrice,
-          LineDiscount: customer.lineDiscount,
-          lineAmount: customer.lineAmount,
-          currencyCode: customer.currencyCode,
-          CurrencyRate: customer.currencyRate,
-          SalesPerUnit: customer.salesPerUnit,
-          TotalSales: customer.totalSales,
-          PodocumentNo: customer.podocumentNo,
-          CustAppDimName: customer.custAppDimName,
-          ProdChipNameDimName: customer.prodChipNameDimName,
-          RegionDimName3: customer.regionDimName3,
-          SalespersonDimName: customer.salespersonDimName,
+  async loadSharePointData({ commit }) {
+  commit("SET_LOADING", true);
+  commit("SET_ERROR", null);
+  try {
+    const rawData = await sharepointService.getSharePointData();
 
-          SharePointListName: customer.sharePointListName,
-          Modified: normalizeDateToISOString(customer.modified),
-          CreatedBy: customer.createdBy || "DataMatchPortal",
-          MatchedDate: normalizeDateToISOString(customer.matchedDate),
-          Status: customer.status || "Active",
-          LastContactDate: normalizeDateToISOString(customer.lastContactDate),
-        }))
+    if (!Array.isArray(rawData)) {
+      throw new Error("Received data is not an array from SharePoint service.");
+    }
+
+    const filteredData = rawData.filter((item) => {
+      return item.pipelineStage == "Design-Win";
+    });
+
+    console.log(
+      `SharePoint: Fetched ${rawData.length} records, filtered down to ${filteredData.length} records`
     );
 
-    const payload = { records: sanitizedRecords };
-
-    return await fetch("/api/customer-data/merged", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  },
+    commit("SET_SHAREPOINT_DATA", filteredData);
+  } catch (error) {
+    console.error("Failed to load SharePoint Data:", error);
+    commit("SET_ERROR", `SharePoint Load Failed: ${error.message}`);
+    commit("SET_SHAREPOINT_DATA", []);
+  } finally {
+    commit("SET_LOADING", false);
+  }
+},
 
   async loadAzureTableData({ commit }) {
     commit("SET_LOADING", true);
@@ -554,6 +600,47 @@ const actions = {
       commit("SET_AZURE_TABLE_DATA", []);
     } finally {
       commit("SET_LOADING", false);
+    }
+  },
+
+  async matchItems(
+    { commit, state },
+    { sharePointItem, azureItem, similarity }
+  ) {
+    commit("ADD_MATCH", { sharePointItem, azureItem, similarity });
+  },
+
+  async unmatchItems({ commit }, { sharepointId, azureRowKey }) {
+    commit("REMOVE_MATCH", { sharepointId, azureRowKey });
+    
+  },
+
+  async saveMatchedGroupsToBackend({ state }, recordsToSave) {
+    try {
+      const payload = { records: recordsToSave };
+      console.log("🗄️ Sending matched records to backend for saving:", payload);
+      const response = await azureService.updateMergedData(payload); // ใช้ azureService.updateMergedData
+      console.log("✅ Matched records saved to backend:", response);
+    } catch (error) {
+      console.error("❌ Failed to save matched records to backend:", error);
+      // ควรจัดการ error เช่น แสดงข้อความให้ผู้ใช้ทราบ
+    }
+  },
+
+  // ➡️ Action สำหรับลบข้อมูล Matched Record จาก Backend
+  async deleteMatchedRecordFromBackend(context, azureRowKey) {
+    try {
+      console.log(
+        `🗑️ Requesting delete for matched record with RowKey: ${azureRowKey}`
+      );
+      const response = await azureService.deleteMergedDocument(azureRowKey);
+      console.log("✅ Matched record deleted from backend:", response);
+    } catch (error) {
+      console.error(
+        `❌ Failed to delete matched record ${azureRowKey} from backend:`,
+        error
+      );
+      // ควรจัดการ error เช่น แสดงข้อความให้ผู้ใช้ทราบ
     }
   },
 
@@ -584,17 +671,10 @@ const actions = {
     commit("SET_SHOW_ALL_SIMILAR", false);
   },
 
-  matchItems({ commit }, { sharePointItem, azureItem, similarity }) {
-    commit("ADD_MATCH", { sharePointItem, azureItem, similarity });
-  },
-
-  unmatchItems({ commit }, { sharepointId, azureRowKey }) {
-    // แก้ไขเป็น azureRowKey
-    commit("REMOVE_MATCH", { sharepointId, azureRowKey }); // ส่ง azureRowKey ไปยัง mutation
-  },
-
   clearAllMatches({ commit }) {
     commit("CLEAR_ALL_MATCHES");
+    // หากต้องการให้ clear ทั้งหมดใน backend ต้องเรียก API ตาม id ของแต่ละ Record
+    // ใน context ของ matchedGroups คุณจะต้องวนลูป matchedGroups และเรียก deleteMatchedRecordFromBackend
   },
 
   resetState({ commit }) {
@@ -610,25 +690,61 @@ const actions = {
   },
 
   // --- เพิ่ม Action สำหรับ Sorting SharePoint Data ---
-  setSharePointSort({ commit, state }, { key }) {
-    let direction = "desc";
-
-    if (state.sharePointSortKey === key) {
-      direction = state.sharePointSortDirection === "desc" ? "asc" : "desc";
-    } else if (key === "customerName" || key === "opportunityName") {
-      direction = "asc";
+  setSharePointSort({ commit, state }, { key, direction }) {
+    // direction อาจจะถูกส่งมาด้วย
+    let actualDirection = direction;
+    if (!actualDirection) {
+      // ถ้าไม่ได้ส่งมาให้ toggle เอง
+      actualDirection =
+        state.sharePointSortConfig.direction === "asc" ? "desc" : "asc";
     }
-    commit("SET_SHAREPOINT_SORT", { key, direction });
+
+    if (state.sharePointSortKey === key && direction === undefined) {
+      // ถ้า key เดิมและไม่ได้ระบุ direction
+      actualDirection =
+        state.sharePointSortDirection === "asc" ? "desc" : "asc";
+    } else if (key === "customerName" || key === "opportunityId") {
+      // default asc สำหรับ text
+      actualDirection = "asc";
+    } else if (key === "calculatedRevenue" || key === "s9DWINEntryDate") {
+      // default desc สำหรับ revenue/date
+      actualDirection = "desc";
+    } else {
+      // ถ้าเป็น key ใหม่เริ่มต้นด้วย desc
+      actualDirection = "desc";
+    }
+
+    commit("SET_SHAREPOINT_SORT", { key, direction: actualDirection });
   },
   // --- เพิ่ม Action สำหรับ Sorting Azure Data ---
-  setAzureSort({ commit, state }, { key }) {
-    let direction = "desc";
-    if (state.azureSortKey === key) {
-      direction = state.azureSortDirection === "desc" ? "asc" : "desc";
-    } else if (key === "customerName") {
-      direction = "asc";
+  setAzureSort({ commit, state }, { key, direction }) {
+    // direction อาจจะถูกส่งมาด้วย
+    let actualDirection = direction;
+    if (!actualDirection) {
+      // ถ้าไม่ได้ส่งมาให้ toggle เอง
+      actualDirection =
+        state.azureSortConfig.direction === "asc" ? "desc" : "asc";
     }
-    commit("SET_AZURE_SORT", { key, direction });
+
+    if (state.azureSortKey === key && direction === undefined) {
+      // ถ้า key เดิมและไม่ได้ระบุ direction
+      actualDirection = state.azureSortDirection === "asc" ? "desc" : "asc";
+    } else if (key === "customerName") {
+      // default asc สำหรับ text
+      actualDirection = "asc";
+    } else if (
+      key === "similarity" ||
+      key === "documentDate" ||
+      key === "potentialRevenue"
+    ) {
+      // default desc สำหรับ score/date/revenue
+      actualDirection = "desc";
+    } else {
+      // ถ้าเป็น key ใหม่เริ่มต้นด้วย desc
+      actualDirection = "desc";
+    }
+
+    commit("SET_AZURE_SORT", { key, direction: actualDirection });
   },
 };
 
