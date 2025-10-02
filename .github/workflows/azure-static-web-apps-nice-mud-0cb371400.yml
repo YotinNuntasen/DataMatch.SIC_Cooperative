@@ -30,7 +30,6 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "/frontend" # App source code path
           api_location: "data-match-backend/data-match-backend" 
-          api_runtime: "dotnet-isolated:8.0"
           # Api source code path - optional
           output_location: "dist" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######

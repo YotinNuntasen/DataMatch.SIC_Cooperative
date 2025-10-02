@@ -6,8 +6,7 @@
       "samplingSettings": {
         "isEnabled": true,
         "excludedTypes": "Request"
-      },
-      "enableLiveMetricsFilters": false
+      }
     },
     "logLevel": {
       "default": "Information",
@@ -17,23 +16,11 @@
   },
   "extensions": {
     "http": {
-      "routePrefix": "api",
-      "maxOutstandingRequests": 500,
-      "maxConcurrentRequests": 500,
-      "dynamicThrottlesEnabled": true
+      "routePrefix": "api"
     }
   },
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
-  },
-  "managedDependency": {
-    "enabled": true
-  },
-  "retry": {
-    "strategy": "exponentialBackoff",
-    "maxRetryCount": 1,
-    "minimumInterval": "00:00:02",
-    "maximumInterval": "00:00:15"
   }
 }
