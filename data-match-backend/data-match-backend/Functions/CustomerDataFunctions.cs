@@ -31,7 +31,7 @@ namespace DataMatchBackend.Functions
 
         [Function("GetMergedCustomerData")]
         public async Task<HttpResponseData> GetMergedCustomerData(
-            // ✅ เปลี่ยน Route เป็น "customer-data/merged" สำหรับ GetAllPersonDocumentsAsync
+            
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/merged")] HttpRequestData req)
         {
             try

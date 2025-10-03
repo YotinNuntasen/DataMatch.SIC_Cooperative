@@ -30,7 +30,7 @@ namespace DataMatchBackend.Functions
             LogServiceStatus();
         }
 
-        // SharePointFunctions.cs
+        
 
         [Function("GetSharePointContacts")]
         public async Task<HttpResponseData> GetSharePointContacts(
@@ -40,40 +40,37 @@ namespace DataMatchBackend.Functions
             {
                 _logger.LogInformation("Endpoint `sharepoint/contacts` requested.");
 
-                // 1. ตรวจสอบว่า Service พร้อมใช้งานหรือไม่
+                
                 if (!IsServiceAvailable<ISharePointService>())
                 {
                     _logger.LogWarning("GetSharePointContacts called but ISharePointService is not available in DI.");
                     return await CreateServiceUnavailableResponse(req, "SharePoint", "ENABLE_SHAREPOINT_SERVICE");
                 }
 
-                // 2. ตรวจสอบ Token
+                
                 var userToken = ExtractUserToken(req);
                 if (string.IsNullOrEmpty(userToken))
                 {
                     return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, "Authorization header with a Bearer token is required.");
                 }
 
-                // ไม่จำเป็นต้องเรียก ValidateAuthenticationAsync ถ้า Service จะใช้ token โดยตรง
+                
 
                 _logger.LogInformation("Calling SharePoint service to get opportunity list...");
-                var result = await _sharePointService!.GetOpportunityListAsync(userToken); // ใช้เครื่องหมาย ! เพื่อบอกว่าเรารู้ว่ามันไม่เป็น null
-
-                // 3. ตรวจสอบผลลัพธ์จาก Service และสร้าง Response ที่ถูกต้อง
+                var result = await _sharePointService!.GetOpportunityListAsync(userToken); 
                 if (result.Success)
                 {
-                    // สร้าง ApiResponse ที่มีโครงสร้าง { success, message, data, ... }
-                    // ซึ่ง Frontend คาดหวัง
+                    
                     var finalResponse = new ApiResponse<List<SharePointContact>>
                     {
                         Success = true,
                         Message = result.Message,
-                        Data = result.Data ?? new List<SharePointContact>(), // <-- นี่คือ property 'data' ที่ Frontend ต้องการ
+                        Data = result.Data ?? new List<SharePointContact>(),
                         Count = result.Data?.Count ?? 0
                     };
                     finalResponse.WithMetadata("source", result.Source);
 
-                    return await CreateOkResponse(req, finalResponse); // ใช้ Helper ส่งกลับไป
+                    return await CreateOkResponse(req, finalResponse);
                 }
                 else
                 {
