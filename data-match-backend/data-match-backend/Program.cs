@@ -1,4 +1,4 @@
-// Program.cs
+
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,16 +24,19 @@ var host = new HostBuilder()
 
         Console.WriteLine("=== Configuration Check (Test Mode) ===");
         Console.WriteLine($"AzureWebJobsStorage configured: {!string.IsNullOrEmpty(valuesSection["AzureWebJobsStorage"])}");
-        
+
         var enableAuth = bool.Parse(valuesSection["ENABLE_AUTH_SERVICE"] ?? "false");
         var enableSharePoint = bool.Parse(valuesSection["ENABLE_SHAREPOINT_SERVICE"] ?? "true");
         var enableMatching = bool.Parse(valuesSection["ENABLE_MATCHING_SERVICE"] ?? "true");
-        // var enableDataService = bool.Parse(valuesSection["ENABLE_DATA_SERVICE"] ?? "true");
-
-        // if (enableDataService)
-        // {
-        //     services.AddScoped<IDataService, TableStorageService>();
         
+        //after this text is suspend Code make me Deploy fail
+        var enableDataService = bool.Parse(valuesSection["ENABLE_DATA_SERVICE"] ?? "true");
+
+        if (enableDataService)
+        {
+            services.AddScoped<IDataService, TableStorageService>();
+        }
+
     })
     .Build();
 
