@@ -6,7 +6,7 @@ using Microsoft.Extensions.Hosting;
 using System.IO;
 using Sic.Login;
 using DataMatchBackend.Services;
-// using DataMatchBackend.Authentication;
+using DataMatchBackend.Authentication;
 // using Microsoft.Extensions.Options;
 
 var host = new HostBuilder()
