@@ -17,27 +17,56 @@ var host = new HostBuilder()
               .AddEnvironmentVariables();
     })
     .ConfigureFunctionsWorkerDefaults()
-    .ConfigureServices((context, services) =>
+    
+.ConfigureServices((context, services) =>
+{
+    var configuration = context.Configuration;
+    var valuesSection = configuration.GetSection("Values");
+
+    services.Configure<SharePointServiceOptions>(configuration.GetSection("SharePoint"));
+
+    services.AddHttpClient<ISharePointService, SharePointRestService>(client =>
     {
-        var configuration = context.Configuration;
-        var valuesSection = configuration.GetSection("Values");
-
-        Console.WriteLine("=== Configuration Check (Test Mode) ===");
-        Console.WriteLine($"AzureWebJobsStorage configured: {!string.IsNullOrEmpty(valuesSection["AzureWebJobsStorage"])}");
-
-        var enableAuth = bool.Parse(valuesSection["ENABLE_AUTH_SERVICE"] ?? "false");
-        var enableSharePoint = bool.Parse(valuesSection["ENABLE_SHAREPOINT_SERVICE"] ?? "true");
-        var enableMatching = bool.Parse(valuesSection["ENABLE_MATCHING_SERVICE"] ?? "true");
-        
-        //after this text is suspend Code make me Deploy fail
-        var enableDataService = bool.Parse(valuesSection["ENABLE_DATA_SERVICE"] ?? "true");
-
-        if (enableDataService)
+        var baseUrl = configuration["SHAREPOINT_SITE_URL"]; // 
+        if (string.IsNullOrEmpty(baseUrl))
         {
-            services.AddScoped<IDataService, TableStorageService>();
+
+            baseUrl = valuesSection["SHAREPOINT_SITE_URL"];
         }
 
-    })
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            client.BaseAddress = new Uri(baseUrl);
+        }
+    });
+
+    var enableAuth = bool.Parse(configuration["ENABLE_AUTH_SERVICE"] ?? valuesSection["ENABLE_AUTH_SERVICE"] ?? "false");
+    var enableSharePoint = bool.Parse(configuration["ENABLE_SHAREPOINT_SERVICE"] ?? valuesSection["ENABLE_SHAREPOINT_SERVICE"] ?? "true");
+    var enableMatching = bool.Parse(configuration["ENABLE_MATCHING_SERVICE"] ?? valuesSection["ENABLE_MATCHING_SERVICE"] ?? "true");
+    var enableDataService = bool.Parse(configuration["ENABLE_DATA_SERVICE"] ?? valuesSection["ENABLE_DATA_SERVICE"] ?? "true");
+
+    if (enableDataService)
+    {
+        services.AddScoped<IDataService, TableStorageService>();
+    }
+
+    if (enableSharePoint)
+    {
+
+    }
+
+    if (enableMatching)
+    {
+        services.AddScoped<ISimilarityService, SimilarityService>();
+    }
+    services.AddScoped<IValidationService, ValidationService>();
+    if (enableAuth)
+    {
+        services.AddScoped<AuthenAccess>();
+    }
+
+
+})
     .Build();
 
 try
