@@ -3,7 +3,7 @@ import store from "../store";
 
 class SharePointService {
   constructor() {
-    this.baseURL = "http://localhost:7204/api";
+    this.baseURL = "/api";
     this.apiClient = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,

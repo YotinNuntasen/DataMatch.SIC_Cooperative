@@ -4,7 +4,7 @@ import { createApiClient } from "../utils/apiClient";
 
 class AzureService {
   constructor() {
-    this.baseURL = "http://localhost:7204/api";
+    this.baseURL = '/api';
 
     this.apiClient = createApiClient({
       baseURL: this.baseURL,
