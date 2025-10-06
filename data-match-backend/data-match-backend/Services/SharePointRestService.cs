@@ -126,6 +126,28 @@ namespace DataMatchBackend.Services
                     .WithMetadata("itemCount", contacts.Count)
                     .WithMetadata("listName", _listTitle);
             }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "HTTP Request Error accessing SharePoint: {StatusCode}", ex.StatusCode);
+                
+                var statusCode = ex.StatusCode;
+                var errorCode = "SP_HTTP_ERROR";
+                string message = "SharePoint access failed.";
+
+                if (statusCode == System.Net.HttpStatusCode.Unauthorized || statusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    errorCode = "SP_UNAUTHORIZED";
+                    message = "Access denied or token expired. Please re-login.";
+                }
+                else if (statusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    errorCode = "SP_NOT_FOUND";
+                    message = "SharePoint list was not found.";
+                }
+
+                return SharePointApiResponse<List<SharePointContact>>.Error(message, errorCode);
+            }
+           
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error accessing SharePoint with User Context");
@@ -134,29 +156,6 @@ namespace DataMatchBackend.Services
                     "SP_UNEXPECTED_ERROR");
             }
         }
-
-
-        // private async Task<Dictionary<int, string>> GetSalePersonNamesByIdsAsync(string userToken, IEnumerable<int> ids)
-        // {
-        //     if (!ids.Any())
-        //     {
-        //         return new Dictionary<int, string>();
-        //     }
-
-
-        //     var filterQuery = string.Join(" or ", ids.Select(id => $"Id eq {id}"));
-
-        //     var endpoint = $"_api/web/lists/getbytitle('{_salePersonListTitle}')/items?$filter={filterQuery}&$select=Id,Title"; 
-        //     _logger.LogWarning("GetSalePersonNamesByIdsAsync called, this might indicate a mismatch in data structure assumption.");
-
-        //     var salePersons = await GetItemsFromSharePointAsync(endpoint, userToken, (item) => new
-        //     {
-        //         Id = GetInt(item, "Id"),
-        //         Title = GetString(item, "Title")
-        //     });
-
-        //     return salePersons.ToDictionary(sp => sp.Id, sp => sp.Title);
-        // }
 
         /// <summary>
         /// ดึงชื่อ Sale Person (User Field) จาก Customer List โดยใช้ Customer IDs
@@ -187,7 +186,7 @@ namespace DataMatchBackend.Services
                     SalePersonName = GetStringFromNestedLookup(item, salePersonLookupUserField, "Title")
                 });
 
-                // ขั้นที่ 2: Filter ในฝั่ง .NET Code โดยใช้ Customer IDs ที่เราต้องการ
+                
                 foreach (var customerItem in allCustomerData)
                 {
                     if (uniqueCustomerIds.Contains(customerItem.CustomerId) &&
@@ -201,8 +200,7 @@ namespace DataMatchBackend.Services
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Error getting ALL customer data. Endpoint: {endpoint}. Error: {message}", endpoint, ex.Message);
-                // อาจจะพิจารณาโยน Exception นี้ขึ้นไป หรือคืนค่าว่างเปล่า
-                throw; // โยน Exception เพื่อให้ GetOpportunityListAsync รับรู้ปัญหา
+                throw;
             }
 
             return allSalePersonNames;
@@ -211,13 +209,12 @@ namespace DataMatchBackend.Services
         {
             if (element.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.Object)
             {
-                // ตรวจสอบว่าเป็น User Field ที่ Resolve ได้หรือไม่
+                
                 if (prop.TryGetProperty(subKey, out var subProp) && subProp.ValueKind != JsonValueKind.Null)
                 {
                     return subProp.GetString() ?? "";
                 }
-                // กรณีที่เป็น Lookup Field ไปยัง List อื่นๆ อาจจะลองดึงค่าจาก "__metadata" ถ้าจำเป็น
-                // แต่สำหรับ User/Person Field ควรดึงจาก subKey โดยตรง
+               
             }
             return "";
         }

@@ -51,7 +51,7 @@ class AzureService {
       "documentNo",
       "lineNo",
       "PartitionKey",
-      "RowKey", // ➡️ จะใช้ RowKey นี้เป็นตัวระบุใน PersonDocument
+      "RowKey", 
       "Timestamp",
       "selltoCustName_SalesHeader",
       "shortName",
@@ -101,14 +101,12 @@ class AzureService {
         "❌ Invalid response format from /api/customer-data/source",
         response.data
       );
-      throw new Error("Invalid response format");
+      throw new Error("Invalid response format: data array is missing or empty.");
     } catch (error) {
+     
       console.error("❌ Failed to fetch customer data:", error.message);
-      if (error.response?.data) {
-        console.error("Error details:", error.response.data);
-      }
-      console.log("🧪 Using mock Azure Table data for development");
-      return this.getMockAzureData(); // ตรวจสอบว่า getMockAzureData มีข้อมูล RowKey ที่ถูกต้อง
+      throw error; 
+       
     }
   }
 

@@ -31,7 +31,7 @@ namespace DataMatchBackend.Functions
 
         [Function("GetMergedCustomerData")]
         public async Task<HttpResponseData> GetMergedCustomerData(
-            
+
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/merged")] HttpRequestData req)
         {
             try
@@ -98,8 +98,10 @@ namespace DataMatchBackend.Functions
 
                 var authResult = await ValidateAuthenticationAsync(req);
                 if (!authResult.IsValid)
-                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage); 
 
+                var personDocuments = await _dataService!.GetAllPersonDocumentsAsync();
+                
                 var searchCriteria = await ParseSearchCriteria(req);
                 if (searchCriteria == null)
                     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid search criteria");
