@@ -61,16 +61,16 @@ namespace DataMatchBackend.Functions
                 if (result.Success)
                 {
                     
-                    var finalResponse = new ApiResponse<List<SharePointContact>>
-                    {
-                        Success = true,
-                        Message = result.Message,
-                        Data = result.Data ?? new List<SharePointContact>(),
-                        Count = result.Data?.Count ?? 0
-                    };
-                    finalResponse.WithMetadata("source", result.Source);
+                    // var finalResponse = new ApiResponse<List<SharePointContact>>
+                    // {
+                    //     Success = true,
+                    //     Message = result.Message,
+                    //     Data = result.Data ?? new List<SharePointContact>(),
+                    //     Count = result.Data?.Count ?? 0
+                    // };
+                    // finalResponse.WithMetadata("source", result.Source);
 
-                    return await CreateOkResponse(req, finalResponse);
+                    return await CreateOkResponse(req, result.Data ?? new List<SharePointContact>(), result.Message);
                 }
                 else
                 {
