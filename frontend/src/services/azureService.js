@@ -43,7 +43,6 @@ class AzureService {
     }
   }
 
-  // === AZURE TABLE DATA METHODS ===
 
   async getAzureTableData(accessToken) {
     const columnsToSelect = [
