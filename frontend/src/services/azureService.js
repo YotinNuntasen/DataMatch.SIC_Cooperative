@@ -78,7 +78,8 @@ class AzureService {
     try {
       console.log("📊 Fetching customer data from API...");
       const response = await this.apiClient.get("/customer-data/source", {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {'Content-Type': 'application/json'},
+        // { Authorization: `Bearer ${accessToken}` },
         params: {
           select: columnsToSelect.join(","),
         },
@@ -255,7 +256,8 @@ class AzureService {
 
       const response = await this.apiClient.get("/sharepoint/contacts", {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+          // Authorization: `Bearer ${accessToken}`,
         },
       });
 
