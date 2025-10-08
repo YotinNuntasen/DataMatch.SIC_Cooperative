@@ -1,0 +1,11 @@
+{
+  "navigationFallback": {
+    "rewrite": "/nbo-matching/index.html"
+  },
+  "routes": [
+    {
+      "route": "/nbo-matching/*",
+      "rewrite": "/nbo-matching/index.html"
+    }
+  ]
+}
