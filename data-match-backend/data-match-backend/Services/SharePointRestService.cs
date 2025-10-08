@@ -22,8 +22,8 @@ namespace DataMatchBackend.Services
 
         
         private record OpportunityRawData(
-            JsonElement Json, // เก็บ JsonElement ทั้งก้อนไว้ก่อน
-            int CustomerId // ดึง CustomerId ออกมาเลย
+            JsonElement Json, 
+            int CustomerId 
         );
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -37,11 +37,8 @@ namespace DataMatchBackend.Services
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             var spOptions = options?.Value ?? throw new ArgumentNullException(nameof(options));
-            _listTitle = spOptions.OpportunityListTitle ?? throw new InvalidOperationException("OpportunityListTitle is required");
-            _customerListTitle = "Customer List"; // กำหนดชื่อ Customer List ที่ถูกต้อง
-
-            // ไม่จำเป็นต้องใช้ _salePersonListTitle ใน Constructor นี้แล้ว
-            // เพราะ Sale Person Field ที่เราต้องการอยู่ใน Customer List
+            _listTitle = spOptions.OpportunityListTitle  ?? throw new InvalidOperationException("OpportunityListTitle is required");
+            _customerListTitle = "Customer List"; //
         }
 
         public async Task<SharePointApiResponse<List<SharePointContact>>> GetOpportunityListAsync(string userToken)
