@@ -50,7 +50,7 @@ function generateCSVContent(data, selectedColumns) {
   const columnLabels = getColumnLabels();
   let columnsToExport = selectedColumns || [];
 
-  
+  // สร้าง header row โดยใช้ label ที่อ่านง่าย
   const headerRow = columnsToExport.map(colKey => {
     const label = columnLabels[colKey] || colKey;
     return escapeCSVField(label);

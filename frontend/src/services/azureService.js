@@ -4,7 +4,7 @@ import { createApiClient } from "../utils/apiClient";
 
 class AzureService {
   constructor() {
-    this.baseURL = '/api';
+    this.baseURL = "http://localhost:7204/api";
 
     this.apiClient = createApiClient({
       baseURL: this.baseURL,
@@ -51,7 +51,7 @@ class AzureService {
       "documentNo",
       "lineNo",
       "PartitionKey",
-      "RowKey", 
+      "RowKey", // ➡️ จะใช้ RowKey นี้เป็นตัวระบุใน PersonDocument
       "Timestamp",
       "selltoCustName_SalesHeader",
       "shortName",
@@ -101,12 +101,14 @@ class AzureService {
         "❌ Invalid response format from /api/customer-data/source",
         response.data
       );
-      throw new Error("Invalid response format: data array is missing or empty.");
+      throw new Error("Invalid response format");
     } catch (error) {
-     
       console.error("❌ Failed to fetch customer data:", error.message);
-      throw error; 
-       
+      if (error.response?.data) {
+        console.error("Error details:", error.response.data);
+      }
+      console.log("🧪 Using mock Azure Table data for development");
+      return this.getMockAzureData(); // ตรวจสอบว่า getMockAzureData มีข้อมูล RowKey ที่ถูกต้อง
     }
   }
 

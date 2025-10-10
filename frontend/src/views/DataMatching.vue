@@ -59,11 +59,11 @@
               <span v-else>↓ Desc</span>
             </button>
           </div>
-         
+          <!-- --- ⬆️ สิ้นสุดการเปลี่ยนแปลงสำหรับ Sorting SharePoint Opportunities ⬆️ --- -->
 
 
           <div class="mail-list-container">
-            
+            <!-- ใช้ displaySharePointData ซึ่งเป็นข้อมูลที่ถูกเรียงแล้ว -->
             <div v-for="item in displaySharePointData" :key="item.id" class="mail-item" :class="{
               'selected': selectedSharePointItem?.id === item.id,
               'has-matches': hasMatches(item.id)

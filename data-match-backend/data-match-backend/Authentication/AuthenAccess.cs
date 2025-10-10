@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -77,6 +78,15 @@ public class AuthenAccess
                 return authHeader.Substring("Bearer ".Length).Trim();
             }
         }
+        return null;
+    }
+
+    private static string? ExtractTokenFromHttpRequest(HttpRequest req)
+    {
+        var authorizationHeader = req.Headers?["Authorization"];
+        var parts = authorizationHeader?.ToString().Split(' ') ?? Array.Empty<string>();
+        if (parts.Length == 2 && parts[0].Equals("Bearer", StringComparison.OrdinalIgnoreCase))
+            return parts[1];
         return null;
     }
 

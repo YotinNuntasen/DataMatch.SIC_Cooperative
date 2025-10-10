@@ -3,7 +3,7 @@ import store from "../store";
 
 class SharePointService {
   constructor() {
-    this.baseURL = "/api";
+    this.baseURL = "http://localhost:7204/api";
     this.apiClient = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,
@@ -48,45 +48,64 @@ class SharePointService {
   }
 
   async getSharePointData() {
-    try {
-      console.log("📊 Fetching SharePoint data from backend...");
-      const headers = await this.getAuthHeaders();
-      const response = await this.apiClient.get("/sharepoint/contacts", {
-        headers,
-      });
+  try {
+    console.log("📊 Fetching SharePoint data from backend...");
+    const headers = await this.getAuthHeaders();
+    const response = await this.apiClient.get("/sharepoint/contacts", {
+      headers,
+    });
 
-      const outerApiResponse = response.data;
-      const innerApiResponse = outerApiResponse?.data;
+    // axios response อยู่ใน response.data
+    const outerApiResponse = response.data;
+    
+    // ==============================================================================
+    // === 🔥 START: ส่วนที่แก้ไขใหม่ 🔥 ===
+    // ==============================================================================
+    
+    // เจาะเข้าไปที่ "data" property ชั้นใน ซึ่งก็คือ ApiResponse ที่แท้จริงจาก Function
+    const innerApiResponse = outerApiResponse?.data; 
 
-      if (
-        innerApiResponse &&
-        innerApiResponse.success &&
-        Array.isArray(innerApiResponse.data)
-      ) {
-        const processedData = this.processSharePointData(innerApiResponse.data);
-        console.log(
-          `✅ API Message: "${innerApiResponse.message}". Processed ${processedData.length} records.`
-        );
-        return processedData;
-      } else {
-        const errorMessage =
-          innerApiResponse?.message ||
-          outerApiResponse?.message ||
-          "Invalid or nested response structure from backend.";
-        throw new Error(errorMessage);
-      }
-    } catch (error) {
-      console.error("❌ Failed to fetch SharePoint data:", error.message);
+    // 1. ตรวจสอบโครงสร้างใหม่ที่ซ้อนกัน 2 ชั้น
+    if (innerApiResponse && innerApiResponse.success && Array.isArray(innerApiResponse.data)) {
+    
+      // 2. ส่ง Array ข้อมูลที่อยู่ลึกที่สุด (innerApiResponse.data) ไปประมวลผล
+      const processedData = this.processSharePointData(innerApiResponse.data);
 
-      const errorMessage =
-        error.response?.data?.data?.message ||
-        error.response?.data?.message ||
-        error.message ||
-        "Could not retrieve SharePoint data. Please contact support.";
+      console.log(
+        `✅ API Message: "${innerApiResponse.message}". Processed ${processedData.length} records.`
+      );
+      
+      // 3. คืนค่า Array ที่เราต้องการ
+      return processedData;
 
+    } else {
+      // โยน Error ถ้าโครงสร้างไม่ถูกต้อง
+      const errorMessage = innerApiResponse?.message || outerApiResponse?.message || "Invalid or nested response structure from backend.";
       throw new Error(errorMessage);
     }
+    // ==============================================================================
+    // === END: ส่วนที่แก้ไขใหม่ 🔥 ===
+    // ==============================================================================
+
+  } catch (error) {
+    console.error("❌ Failed to fetch SharePoint data:", error);
+
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "⚠️ Could not fetch real data. Falling back to MOCK data for development."
+      );
+      return this.getMockSharePointData();
+    }
+    
+    // ใช้ error message ที่มีความหมาย ถ้ามี
+    throw new Error(
+      error.response?.data?.data?.message || // ลึกที่สุด
+      error.response?.data?.message ||        // ชั้นนอก
+      error.message ||                        // message จาก object Error เอง
+      "Could not retrieve SharePoint data. Please contact support."
+    );
   }
+}
 
   processSharePointData(data) {
     if (!Array.isArray(data)) {

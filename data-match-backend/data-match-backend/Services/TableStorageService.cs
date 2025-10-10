@@ -12,23 +12,22 @@ public class TableStorageService : IDataService
     private readonly TableClient _matchTableClient;
     private readonly ILogger<TableStorageService> _logger;
     private readonly string _connectionString;
-    
 
     public async Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId)
-    {
-        if (string.IsNullOrEmpty(opportunityId))
         {
-            throw new ArgumentNullException(nameof(opportunityId), "OpportunityId cannot be null or empty.");
-        }
-        List<PersonDocument> results = new List<PersonDocument>();
-        string filter = $"OpportunityId eq '{opportunityId}'";
-        await foreach (PersonDocument entity in _personDocumentTableClient.QueryAsync<PersonDocument>(filter))
-        {
-            results.Add(entity);
-        }
+            if (string.IsNullOrEmpty(opportunityId))
+            {
+                throw new ArgumentNullException(nameof(opportunityId), "OpportunityId cannot be null or empty.");
+            }
+            List<PersonDocument> results = new List<PersonDocument>();
+            string filter = $"OpportunityId eq '{opportunityId}'";
+            await foreach (PersonDocument entity in _personDocumentTableClient.QueryAsync<PersonDocument>(filter))
+            {
+                results.Add(entity);
+            }
 
-        return results;
-    }
+            return results;
+        }
         
 
     public async Task<PersonDocument> UpsertPersonDocumentAsync(PersonDocument person)

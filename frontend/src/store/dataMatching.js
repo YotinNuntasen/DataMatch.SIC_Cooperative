@@ -548,21 +548,13 @@ const actions = {
         dispatch("loadAzureTableData"),
       ]);
 
-       if(state.sharePointData.length === 0 || state.azureTableData.length === 0) {
-          throw new Error("Initialization stopped because core data loading failed previously.");
-      }
-
       const mergedData = await azureService.getPreviouslyMergedData();
       commit("SET_PREVIOUSLY_MATCHED_DATA", mergedData);
 
       commit("RECONSTRUCT_MATCHED_GROUPS");
     } catch (error) {
       console.error("Data initialization failed:", error);
-
-      const finalMessage = error.message.includes('401') || error.message.includes('Authentication') 
-          ? "Authentication Failed: Please check your login status or permissions."
-          : `Data initialization failed: ${error.message}`;
-      commit("SET_ERROR", finalMessage);
+      commit("SET_ERROR", `Failed to initialize data: ${error.message}`);
     } finally {
       commit("SET_LOADING", false);
     }
@@ -589,10 +581,8 @@ const actions = {
     commit("SET_SHAREPOINT_DATA", filteredData);
   } catch (error) {
     console.error("Failed to load SharePoint Data:", error);
-    const errorMessage = error.message || "Unknown error during SharePoint data load.";
-    commit("SET_ERROR", `SharePoint Load Failed: ${errorMessage}`);
-      commit("SET_SHAREPOINT_DATA", []);
-      throw error; 
+    commit("SET_ERROR", `SharePoint Load Failed: ${error.message}`);
+    commit("SET_SHAREPOINT_DATA", []);
   } finally {
     commit("SET_LOADING", false);
   }
@@ -606,10 +596,8 @@ const actions = {
       commit("SET_AZURE_TABLE_DATA", data);
     } catch (error) {
       console.error("Failed to load Azure Table Data:", error);
-      const errorMessage = error.message || "Unknown error during Azure Table data load.";
-      commit("SET_ERROR", `Azure Table Load Failed: ${errorMessage}`);
+      commit("SET_ERROR", `Azure Table Load Failed: ${error.message}`);
       commit("SET_AZURE_TABLE_DATA", []);
-      throw error; 
     } finally {
       commit("SET_LOADING", false);
     }

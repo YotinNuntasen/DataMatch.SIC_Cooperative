@@ -5,7 +5,7 @@ const msalConfig = {
   auth: {
     clientId: "7281d6d6-29d6-40cb-87d2-1bc6eb678cb3",
     authority: "https://login.microsoftonline.com/f21d466c-a8db-4dbe-9a97-4e79d654a7f8",
-    redirectUri: window.location.origin, 
+    redirectUri: "http://localhost:8080", 
   },
   cache: {
     cacheLocation: "localStorage",
@@ -152,13 +152,14 @@ const actions = {
     if (!account) {
       console.warn("No active account found. Attempting to log in.");
       await dispatch('login');
-      
+      // หลังจาก login สำเร็จ, account จะถูก set ใหม่
+      // เราต้อง get account อีกครั้ง
       const newAccount = msalInstance.getActiveAccount();
       if (!newAccount) throw new Error("Login failed, cannot acquire token.");
       
-    
+      // ตั้งค่า request ใหม่ด้วย account ใหม่
       const request = { ...sharepointTokenRequest, account: newAccount };
-     
+      // ขอ token ด้วย popup เลยเพราะเพิ่ง login มา
       const response = await msalInstance.acquireTokenPopup(request);
       return response.accessToken;
     }
@@ -166,11 +167,11 @@ const actions = {
     const request = { ...sharepointTokenRequest, account };
 
     try {
-     
+      // 1. ลองขอแบบเงียบๆ ก่อนเสมอ
       const response = await msalInstance.acquireTokenSilent(request);
       return response.accessToken;
     } catch (error) {
-     
+      // 2. ถ้าแบบเงียบไม่สำเร็จ
       console.warn("Silent token acquisition failed, falling back to popup.", error);
       if (error instanceof msal.InteractionRequiredAuthError) {
         try {
