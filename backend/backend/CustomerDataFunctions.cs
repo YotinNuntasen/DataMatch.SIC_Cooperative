@@ -1,0 +1,556 @@
+// CustomerDataFunctions.cs
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using DataMatchBackend.Services;
+using Microsoft.Extensions.DependencyInjection;
+using DataMatchBackend.Models;
+using System.Net;
+using System.Text.Json;
+// using Sic.Login;
+// using System.Linq;
+// using Microsoft.Graph.Models;
+
+namespace DataMatchBackend.Functions
+{
+    public class CustomerDataFunctions : BaseFunctionService
+    {
+        private readonly IDataService? _dataService;
+        private readonly IValidationService? _validationService;
+
+        public CustomerDataFunctions(IServiceProvider serviceProvider, ILogger<CustomerDataFunctions> logger)
+            : base(logger, serviceProvider)
+        {
+            _dataService = serviceProvider.GetService<IDataService>();
+            _validationService = serviceProvider.GetService<IValidationService>();
+
+            LogServiceStatus();
+        }
+
+        #region === Merged Data Functions ===
+
+        [Function("GetMergedCustomerData")]
+        public async Task<HttpResponseData> GetMergedCustomerData(
+            
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/merged")] HttpRequestData req)
+        {
+            try
+            {
+                _logger.LogInformation("Processing GetMergedCustomerData request");
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var personDocuments = await _dataService!.GetAllPersonDocumentsAsync();
+                _logger.LogInformation("Retrieved {Count} merged customer records", personDocuments.Count);
+
+                return await CreateOkResponse(req, personDocuments, "Merged customer data retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting merged customer data");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Internal server error");
+            }
+        }
+
+        [Function("GetMergedCustomerById")]
+        public async Task<HttpResponseData> GetMergedCustomerById(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/merged/{id}")] HttpRequestData req, string id)
+        {
+            try
+            {
+                _logger.LogInformation("Getting merged customer by ID: {CustomerId}", id);
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var customer = await _dataService!.GetPersonDocumentAsync(id);
+                if (customer == null)
+                    return await CreateErrorResponse(req, HttpStatusCode.NotFound, "Merged customer not found");
+
+                return await CreateOkResponse(req, customer, "Merged customer retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting merged customer by ID: {CustomerId}", id);
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Internal server error");
+            }
+        }
+
+        [Function("SearchMergedCustomers")]
+        public async Task<HttpResponseData> SearchMergedCustomers(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged/search")] HttpRequestData req)
+        {
+            try
+            {
+                _logger.LogInformation("Processing merged customer search request");
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var searchCriteria = await ParseSearchCriteria(req);
+                if (searchCriteria == null)
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid search criteria");
+
+                var customers = await _dataService!.SearchPersonDocumentsAsync(searchCriteria);
+                _logger.LogInformation("Search completed: {Count} merged customers found", customers.Count);
+
+                return await CreateOkResponse(req, customers, $"Found {customers.Count} customers matching criteria");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching merged customers");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Search failed");
+            }
+        }
+
+        [Function("CreateMergedCustomer")]
+        public async Task<HttpResponseData> CreateMergedCustomer(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged")] HttpRequestData req)
+        {
+            try
+            {
+                _logger.LogInformation("Attempting to create new merged customer(s)");
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var updateRequest = await ParseBulkUpdateRequest(req);
+                if (updateRequest?.Records == null || !updateRequest.Records.Any())
+                {
+                    _logger.LogWarning("Request body is empty or contains no customer data");
+                   
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body must contain a list of customer data inside a 'records' property");
+                }
+
+               
+                var result = await ProcessBulkUpsert(updateRequest.Records);
+
+                var responseData = new
+                {
+                    totalCount = updateRequest.Records.Count,
+                    successCount = result.SuccessCount,
+                    failedCount = result.FailedCount,
+                    createdRecords = result.UpsertedPeopleDocuments, // ✅ เปลี่ยนชื่อ property ให้สื่อความหมาย
+                    errors = result.ValidationErrors
+                };
+
+                return await CreateOkResponse(req, responseData, $"Bulk upsert completed. {result.SuccessCount} succeeded, {result.FailedCount} failed");
+            }
+            catch (JsonException jsonEx)
+            {
+                _logger.LogError(jsonEx, "Failed to deserialize request body. Check JSON format");
+                return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid JSON format in the request body. Expecting an object like { 'records': [...] }");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An unexpected error occurred while creating merged customers");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred");
+            }
+        }
+
+        [Function("UpdateMergedCustomer")]
+        public async Task<HttpResponseData> UpdateMergedCustomer(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "customer-data/merged/{id}")] HttpRequestData req, string id)
+        {
+            try
+            {
+                _logger.LogInformation("Updating merged customer: {CustomerId}", id);
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var customer = await ParsePersonDocument(req);
+                if (customer == null)
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid customer data");
+
+                // ✅ ตรวจสอบและกำหนด RowKey จาก route parameter
+                if (string.IsNullOrEmpty(customer.RowKey) || customer.RowKey != id)
+                {
+                    customer.RowKey = id;
+                }
+
+                if (_validationService != null)
+                {
+                    var validationResult = _validationService.ValidatePersonDocument(customer);
+                    if (!validationResult.IsValid)
+                        return await CreateErrorResponse(req, HttpStatusCode.BadRequest, string.Join(", ", validationResult.Errors));
+                }
+
+                var updatedCustomer = await _dataService!.UpdatePersonDocumentAsync(customer);
+                _logger.LogInformation("Updated merged customer: {CustomerName} with ID: {CustomerId}", updatedCustomer.CustShortDimName, updatedCustomer.RowKey);
+
+                return await CreateOkResponse(req, updatedCustomer, "Customer updated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating merged customer: {CustomerId}", id);
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to update customer");
+            }
+        }
+
+        [Function("DeleteMergedCustomer")]
+        public async Task<HttpResponseData> DeleteMergedCustomer(
+           
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "customer-data/merged/{id}")] HttpRequestData req, string id)
+        {
+           
+            return await UnmatchMergedRecord(req, id);
+        }
+
+        [Function("BulkUpdateMergedCustomers")]
+        public async Task<HttpResponseData> BulkUpdateMergedCustomers(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged/bulk-update")] HttpRequestData req)
+        {
+            try
+            {
+                _logger.LogInformation("Processing bulk update request for merged data");
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var updateRequest = await ParseBulkUpdateRequest(req);
+                if (updateRequest?.Records == null || !updateRequest.Records.Any())
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "No records provided for update");
+
+                if (_validationService != null)
+                {
+                    // ✅ ควรต้องมีการเรียก ValidateBulkUpdateRequest ที่เหมาะสม
+                    // var validationResult = _validationService.ValidateBulkUpdate(updateRequest);
+                    // if (!validationResult.IsValid)
+                    //     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, string.Join(", ", validationResult.Errors));
+                }
+
+                if (updateRequest.CreateBackup)
+                {
+                    var backupName = $"merged_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+                    // ✅ ตรวจสอบว่า IDataService ไม่เป็น null ก่อนเรียกใช้
+                    if (_dataService == null)
+                        return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+                    await _dataService.CreateBackupAsync(backupName);
+                    _logger.LogInformation("Created backup: {backupName}", backupName);
+                }
+
+                List<PersonDocument> upsertedRecords = new List<PersonDocument>();
+                int successfulUpdates = 0;
+                int failedUpdates = 0;
+                List<string> errorMessages = new List<string>();
+
+                foreach (var record in updateRequest.Records)
+                {
+                    try
+                    {
+                        // ✅ ที่นี่ควรจะ FilterDataForSave และ UpsertPersonDocumentAsync ทีละรายการเหมือน ProcessBulkUpsert
+                        var filteredRecord = FilterDataForSave(record);
+                        var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredRecord);
+                        if (upserted != null)
+                        {
+                            upsertedRecords.Add(upserted);
+                            successfulUpdates++;
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Bulk Update: Failed to upsert record with RowKey {RowKey}", record.RowKey);
+                            failedUpdates++;
+                            errorMessages.Add($"Failed to upsert record with RowKey {record.RowKey}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Bulk Update: Error processing record with RowKey {RowKey}", record.RowKey);
+                        failedUpdates++;
+                        errorMessages.Add($"Error processing record with RowKey {record.RowKey}: {ex.Message}");
+                    }
+                }
+
+                _logger.LogInformation("Bulk upsert completed: {SuccessCount}/{TotalCount} successful", successfulUpdates, updateRequest.Records.Count);
+
+                var data = new { successCount = successfulUpdates, totalCount = updateRequest.Records.Count, failedCount = failedUpdates, errors = errorMessages };
+                return await CreateOkResponse(req, data, $"Bulk upsert completed: {successfulUpdates}/{updateRequest.Records.Count} successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in bulk upsert for merged data");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Bulk upsert failed");
+            }
+        }
+
+        #endregion
+
+        #region === Source Data Functions ===
+
+        [Function("GetSourceCustomerData")]
+        public async Task<HttpResponseData> GetSourceCustomerData(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "customer-data/source")] HttpRequestData req)
+        {
+            try
+            {
+                _logger.LogInformation("Processing GetSourceCustomerData request");
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var customers = await _dataService!.GetAllCustomersAsync();
+                _logger.LogInformation("Retrieved {Count} source customer records", customers.Count);
+
+                return await CreateOkResponse(req, customers, "Source customer data retrieved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting source customer data");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Internal server error");
+            }
+        }
+
+        #endregion
+
+        #region === Private Helper Methods ===
+
+        private void LogServiceStatus()
+        {
+            _logger.LogInformation("CustomerDataFunctions initialized:");
+            _logger.LogInformation("  - DataService: {Available}", _dataService != null ? "Available" : "Not Available");
+            _logger.LogInformation("  - ValidationService: {Available}", _validationService != null ? "Available" : "Not Available");
+        }
+
+        private async Task<SearchCriteria?> ParseSearchCriteria(HttpRequestData req)
+        {
+            var requestBody = await req.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<SearchCriteria>(requestBody ?? "{}");
+        }
+
+        private async Task<BulkUpdateRequest?> ParseBulkUpdateRequest(HttpRequestData req)
+        {
+            var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+
+            // เพิ่ม options เพื่อให้ deserialize ได้ทั้ง camelCase และ PascalCase
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase // ✅ ควรใช้ CamelCase สำหรับ JSON output แต่ PropertyNameCaseInsensitive จะช่วยให้รับ input ได้ทั้งสองแบบ
+            };
+
+            // ✅ ควรเปลี่ยน from records to peopleDocuments to prevent naming collisions
+            return JsonSerializer.Deserialize<BulkUpdateRequest>(requestBody, options);
+        }
+
+        private async Task<PersonDocument?> ParsePersonDocument(HttpRequestData req)
+        {
+            var requestBody = await req.ReadAsStringAsync();
+            // ✅ เพิ่ม JsonSerializerOptions เพื่อรองรับ input ได้ดีขึ้น
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            return JsonSerializer.Deserialize<PersonDocument>(requestBody ?? "{}", options);
+        }
+
+        // ✅ เปลี่ยนชื่อเมธอดให้สื่อความหมายมากขึ้นว่าเป็นการ Upsert (Create หรือ Update)
+        private async Task<(int SuccessCount, int FailedCount, List<PersonDocument> UpsertedPeopleDocuments, List<string> ValidationErrors)> ProcessBulkUpsert(List<PersonDocument> peopleDocumentsToUpsert)
+        {
+            var upsertedRecords = new List<PersonDocument>();
+            var validationErrors = new List<string>();
+            int successCount = 0;
+            int failedCount = 0;
+
+            _logger.LogInformation("Received {Count} person documents to process for upsert", peopleDocumentsToUpsert.Count);
+
+            foreach (var personDocument in peopleDocumentsToUpsert)
+            {
+                try
+                {
+                    // ✅ ตรวจสอบและกำหนด PartitionKey ถ้ายังไม่ได้กำหนด (สำคัญสำหรับ Azure Table Storage)
+                    // ตัวอย่าง: ถ้า PartitionKey ควรเป็น OpportunityId
+                    if (string.IsNullOrEmpty(personDocument.PartitionKey) && !string.IsNullOrEmpty(personDocument.OpportunityId))
+                    {
+                        personDocument.PartitionKey = personDocument.OpportunityId;
+                    }
+                    // ถ้ายังไม่มี RowKey ให้สร้าง RowKey จาก ID หรือ Composite Key ที่ไม่ซ้ำกัน
+                    if (string.IsNullOrEmpty(personDocument.RowKey))
+                    {
+                        // ✅ ควรมี RowKey ที่ระบุตัวตน (เช่น AzureItem.RowKey) ให้แน่ใจว่าถูกส่งมาจาก Frontend
+                        // ถ้าไม่ระบุ RowKey มา, การ Upsert อาจสร้าง Record ใหม่ตลอดเวลา
+                        // หรือจะสร้างจาก OpportunityId + CustomerItem.RowKey ก็ได้
+                        // ตัวอย่าง: PersonDocument.RowKey = $"{personDocument.OpportunityId}-{personDocument.documentNo}_{personDocument.lineNo}";
+                        // สำหรับกรณีนี้, RowKey ควรจะเป็น RowKey ของ Azure Item ที่ถูกเลือกมา Match
+                    }
+
+                    var filteredPersonDocument = FilterDataForSave(personDocument);
+
+                    // Re-enable validation if needed
+                    // if (_validationService != null)
+                    // {
+                    //     var docValidationResult = _validationService.ValidatePersonDocument(filteredPersonDocument);
+                    //     if (!docValidationResult.IsValid)
+                    //     {
+                    //         var errorMsg = $"Validation failed for '{filteredPersonDocument.CustShortDimName}': {string.Join(", ", docValidationResult.Errors)}";
+                    //         _logger.LogWarning(errorMsg);
+                    //         validationErrors.Add(errorMsg);
+                    //         failedCount++;
+                    //         continue;
+                    //     }
+                    // }
+
+                    var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredPersonDocument);
+
+                    if (upserted != null)
+                    {
+                        upsertedRecords.Add(upserted);
+                        successCount++;
+                        _logger.LogInformation("Successfully upserted person document: {CustShortDimName} (RowKey: {RowKey})", filteredPersonDocument.CustShortDimName, filteredPersonDocument.RowKey);
+                    }
+                    else
+                    {
+                        failedCount++;
+                        validationErrors.Add($"Failed to upsert '{personDocument.CustShortDimName}' (RowKey: {personDocument.RowKey}): Upsert returned null.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upsert individual person document record: {CustShortDimName} (RowKey: {RowKey})", personDocument.CustShortDimName, personDocument.RowKey);
+                    failedCount++;
+                    validationErrors.Add($"Failed to upsert '{personDocument.CustShortDimName}' (RowKey: {personDocument.RowKey}): {ex.Message}");
+                }
+            }
+
+            _logger.LogInformation("Bulk upsert finished. Success: {SuccessCount}, Failed: {FailedCount}", successCount, failedCount);
+            return (successCount, failedCount, upsertedRecords, validationErrors);
+        }
+
+        /// <summary>
+        /// กรองข้อมูลที่จะ save เฉพาะ field ที่ต้องการ
+        /// </summary>
+        private PersonDocument FilterDataForSave(PersonDocument customer)
+        {
+            // ✅ ตรวจสอบและใช้ PartitionKey/RowKey ที่มีอยู่ หรือกำหนดค่าเริ่มต้นให้เหมาะสม
+            // ปกติ PartitionKey ควรเป็น OpportunityId
+            // และ RowKey ควรจะเป็น RowKey ของ Azure Table Item ที่ถูกจับคู่มา
+            var filtered = new PersonDocument
+            {
+                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition", // ✅ ให้แน่ใจว่ามี PartitionKey
+                RowKey = customer.RowKey, // ✅ RowKey ไม่ควรเปลี่ยน
+                // ✅ เพิ่ม OpportunityId เข้ามาด้วย
+                OpportunityId = customer.OpportunityId,
+                // ... (fields อื่นๆ ที่มีอยู่แล้ว)
+                OpportunityName = customer.OpportunityName,
+                CustShortDimName = customer.CustShortDimName,
+                PrefixdocumentNo = customer.PrefixdocumentNo,
+                SelltoCustName_SalesHeader = customer.SelltoCustName_SalesHeader,
+                SystemRowVersion = customer.SystemRowVersion,
+                DocumentDate = customer.DocumentDate,
+                documentNo = customer.documentNo,
+                itemReferenceNo = customer.itemReferenceNo,
+                lineNo = customer.lineNo,
+                no = customer.no,
+                quantity = customer.quantity,
+                sellToCustomerNo = customer.sellToCustomerNo,
+                shipmentNo = customer.shipmentNo,
+                sodocumentNo = customer.sodocumentNo,
+                unitPrice = customer.unitPrice,
+                lineAmount = customer.lineAmount,
+                CurrencyRate = customer.CurrencyRate,
+                SalesPerUnit = customer.SalesPerUnit,
+                TotalSales = customer.TotalSales,
+                CustAppDimName = customer.CustAppDimName,
+                ProdChipNameDimName = customer.ProdChipNameDimName,
+                RegionDimName3 = customer.RegionDimName3,
+                SalespersonDimName = customer.SalespersonDimName,
+                description = customer.description,
+                Created = customer.Created == default ? DateTime.UtcNow : customer.Created, // ✅ หากไม่ได้ระบุ Created มา ให้ใช้ Now
+                Modified = DateTime.UtcNow // ✅ อัปเดต Modified เสมอ
+            };
+
+            return filtered;
+        }
+
+        /// <summary>
+        /// ตรวจสอบว่าควร save customer นี้หรือไม่ (เงื่อนไขที่เข้มงวดมากขึ้น)
+        /// </summary>
+        private bool ShouldSaveCustomer(PersonDocument customer)
+        {
+            // ✅ ควรต้องการทั้ง OpportunityId และ RowKey ของ Azure Item มายืนยัน
+            if (string.IsNullOrEmpty(customer.OpportunityId) || string.IsNullOrEmpty(customer.RowKey))
+            {
+                _logger.LogWarning("Skipping save for PersonDocument with missing OpportunityId or RowKey.");
+                return false;
+            }
+
+            // ตรวจสอบข้อมูลที่สำคัญอื่นๆ
+            if (string.IsNullOrEmpty(customer.CustShortDimName) && string.IsNullOrEmpty(customer.SelltoCustName_SalesHeader))
+            {
+                _logger.LogWarning("Skipping save for PersonDocument with no customer name information.");
+                return false;
+            }
+
+            return true;
+        }
+
+
+        // ✅ เปลี่ยนชื่อเมธอดและ Logic ให้ตรงกับการลบ Record ที่ถูก Match ไว้
+        private async Task<HttpResponseData> UnmatchMergedRecord(HttpRequestData req, string azureRowKey)
+        {
+            try
+            {
+                _logger.LogInformation("Attempting to unmatch/delete merged record with Azure RowKey: {AzureRowKey}", azureRowKey);
+
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                // ✅ ไม่จำเป็นต้องหาตาม sharepointId ด้วย
+                var existingRecord = await _dataService!.GetPersonDocumentAsync(azureRowKey); // หาจาก RowKey เดียว
+                if (existingRecord == null)
+                    return await CreateErrorResponse(req, HttpStatusCode.NotFound, $"Merged record with RowKey '{azureRowKey}' not found.");
+
+                var deleted = await _dataService.DeletePersonDocumentAsync(azureRowKey);
+                if (!deleted)
+                {
+                    _logger.LogError("Failed to delete merged record with RowKey: {AzureRowKey}", azureRowKey);
+                    return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, $"Failed to delete merged record with RowKey '{azureRowKey}'.");
+                }
+
+                _logger.LogInformation("Successfully deleted merged record: {CustShortDimName} (RowKey: {AzureRowKey}) associated with OpportunityId: {OpportunityId}",
+                                       existingRecord.CustShortDimName, azureRowKey, existingRecord.OpportunityId);
+
+                return await CreateOkResponse<object>(req, null, $"Merged record (RowKey: {azureRowKey}) deleted successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unmatching/deleting merged record with Azure RowKey: {AzureRowKey}", azureRowKey);
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "Failed to unmatch/delete merged record.");
+            }
+        }
+        #endregion
+    }
+}
