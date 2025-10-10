@@ -4,7 +4,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 
 export const apiConfig = {
   sharepoint: {
-    baseURL: process.env.VUE_APP_API_BASE_URL || 'https://nbo-matching.azurewebsites.net',
+    baseURL: process.env.VUE_APP_API_BASE_URL || 'https://nbo-matching.azurewebsites.net/api',
     timeout: parseInt(process.env.VUE_APP_API_TIMEOUT) || 30000,
     endpoints: {
       contacts: "/sharepoint/contacts",
@@ -16,7 +16,7 @@ export const apiConfig = {
     }
   },
   azure: {
-    baseURL: process.env.VUE_APP_AZURE_API_BASE_URL || 'https://nbo-matching.azurewebsites.net',
+    baseURL: process.env.VUE_APP_AZURE_API_BASE_URL || 'https://nbo-matching.azurewebsites.net/api',
     timeout: parseInt(process.env.VUE_APP_AZURE_API_TIMEOUT) || 30000,
   },
   development: {

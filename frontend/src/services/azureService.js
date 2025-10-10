@@ -4,7 +4,7 @@ import { createApiClient } from "../utils/apiClient";
 
 class AzureService {
   constructor() {
-    this.baseURL = 'https://nbo-matching.azurewebsites.net'
+    this.baseURL = 'https://nbo-matching.azurewebsites.net/api'
     this.apiClient = createApiClient({
       baseURL: this.baseURL,
       timeout: 30000,
