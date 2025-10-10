@@ -29,13 +29,13 @@ namespace DataMatchBackend.Functions
             {
                 _logger.LogInformation("Validating authentication token");
 
-                // ตรวจสอบว่า Auth Service เปิดใช้งานไหม
+                
                 if (!IsServiceAvailable<AuthenAccess>())
                 {
                     return await CreateServiceUnavailableResponse(req, "Authentication", "ENABLE_AUTH_SERVICE");
                 }
 
-                // เรียกใช้ AuthenAccess เพื่อตรวจสอบ token
+               
                 var userInfo = await _authenAccess!.ValidateTokenAsync(req);
 
                 if (userInfo == null)

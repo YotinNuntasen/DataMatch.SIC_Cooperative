@@ -55,37 +55,26 @@ class SharePointService {
       headers,
     });
 
-    // axios response อยู่ใน response.data
+   
     const outerApiResponse = response.data;
     
-    // ==============================================================================
-    // === 🔥 START: ส่วนที่แก้ไขใหม่ 🔥 ===
-    // ==============================================================================
-    
-    // เจาะเข้าไปที่ "data" property ชั้นใน ซึ่งก็คือ ApiResponse ที่แท้จริงจาก Function
     const innerApiResponse = outerApiResponse?.data; 
 
-    // 1. ตรวจสอบโครงสร้างใหม่ที่ซ้อนกัน 2 ชั้น
     if (innerApiResponse && innerApiResponse.success && Array.isArray(innerApiResponse.data)) {
     
-      // 2. ส่ง Array ข้อมูลที่อยู่ลึกที่สุด (innerApiResponse.data) ไปประมวลผล
       const processedData = this.processSharePointData(innerApiResponse.data);
 
       console.log(
         `✅ API Message: "${innerApiResponse.message}". Processed ${processedData.length} records.`
       );
       
-      // 3. คืนค่า Array ที่เราต้องการ
       return processedData;
 
     } else {
-      // โยน Error ถ้าโครงสร้างไม่ถูกต้อง
+    
       const errorMessage = innerApiResponse?.message || outerApiResponse?.message || "Invalid or nested response structure from backend.";
       throw new Error(errorMessage);
     }
-    // ==============================================================================
-    // === END: ส่วนที่แก้ไขใหม่ 🔥 ===
-    // ==============================================================================
 
   } catch (error) {
     console.error("❌ Failed to fetch SharePoint data:", error);
@@ -97,11 +86,11 @@ class SharePointService {
       return this.getMockSharePointData();
     }
     
-    // ใช้ error message ที่มีความหมาย ถ้ามี
+    
     throw new Error(
-      error.response?.data?.data?.message || // ลึกที่สุด
-      error.response?.data?.message ||        // ชั้นนอก
-      error.message ||                        // message จาก object Error เอง
+      error.response?.data?.data?.message || 
+      error.response?.data?.message ||        
+      error.message ||                        
       "Could not retrieve SharePoint data. Please contact support."
     );
   }
