@@ -1,11 +1,11 @@
 {
   "navigationFallback": {
-    "rewrite": "/nbo-matching/index.html"
+    "rewrite": "/index.html"
   },
   "routes": [],
   "responseOverrides": {
     "404": {
-      "rewrite": "/nbo-matching/index.html",
+      "rewrite": "/index.html",
       "statusCode": 200
     }
   },
