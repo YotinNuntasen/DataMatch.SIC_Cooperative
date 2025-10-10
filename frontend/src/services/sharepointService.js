@@ -3,7 +3,7 @@ import store from "../store";
 
 class SharePointService {
   constructor() {
-    this.baseURL = 'https://nbo-matching.azurewebsites.net/api';
+    this.baseURL = 'https://nbo-matching.azurewebsites.net';
     this.apiClient = axios.create({
       baseURL: this.baseURL,
       timeout: 30000,
