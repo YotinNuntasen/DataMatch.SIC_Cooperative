@@ -619,15 +619,14 @@ const actions = {
     try {
       const payload = { records: recordsToSave };
       console.log("🗄️ Sending matched records to backend for saving:", payload);
-      const response = await azureService.updateMergedData(payload); // ใช้ azureService.updateMergedData
+      const response = await azureService.updateMergedData(payload); 
       console.log("✅ Matched records saved to backend:", response);
     } catch (error) {
       console.error("❌ Failed to save matched records to backend:", error);
-      // ควรจัดการ error เช่น แสดงข้อความให้ผู้ใช้ทราบ
+
     }
   },
 
-  // ➡️ Action สำหรับลบข้อมูล Matched Record จาก Backend
   async deleteMatchedRecordFromBackend(context, azureRowKey) {
     try {
       console.log(

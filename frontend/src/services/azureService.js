@@ -50,7 +50,7 @@ class AzureService {
       "documentNo",
       "lineNo",
       "PartitionKey",
-      "RowKey", // ➡️ จะใช้ RowKey นี้เป็นตัวระบุใน PersonDocument
+      "RowKey", 
       "Timestamp",
       "selltoCustName_SalesHeader",
       "shortName",

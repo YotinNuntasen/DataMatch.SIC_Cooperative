@@ -69,7 +69,7 @@ const mutations = {
   CLEAR_USER(state) {
     state.accessToken = null;
     state.account = null;
-    msalInstance.clearCache(); // เคลียร์ cache ของ msal ด้วย
+    msalInstance.clearCache(); 
     localStorage.removeItem("accessToken");
     localStorage.removeItem("account");
   },
@@ -152,14 +152,10 @@ const actions = {
     if (!account) {
       console.warn("No active account found. Attempting to log in.");
       await dispatch('login');
-      // หลังจาก login สำเร็จ, account จะถูก set ใหม่
-      // เราต้อง get account อีกครั้ง
       const newAccount = msalInstance.getActiveAccount();
       if (!newAccount) throw new Error("Login failed, cannot acquire token.");
       
-      // ตั้งค่า request ใหม่ด้วย account ใหม่
       const request = { ...sharepointTokenRequest, account: newAccount };
-      // ขอ token ด้วย popup เลยเพราะเพิ่ง login มา
       const response = await msalInstance.acquireTokenPopup(request);
       return response.accessToken;
     }
@@ -167,11 +163,9 @@ const actions = {
     const request = { ...sharepointTokenRequest, account };
 
     try {
-      // 1. ลองขอแบบเงียบๆ ก่อนเสมอ
       const response = await msalInstance.acquireTokenSilent(request);
       return response.accessToken;
     } catch (error) {
-      // 2. ถ้าแบบเงียบไม่สำเร็จ
       console.warn("Silent token acquisition failed, falling back to popup.", error);
       if (error instanceof msal.InteractionRequiredAuthError) {
         try {
