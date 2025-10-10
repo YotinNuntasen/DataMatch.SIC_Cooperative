@@ -62,8 +62,7 @@
           <!-- --- ⬆️ สิ้นสุดการเปลี่ยนแปลงสำหรับ Sorting SharePoint Opportunities ⬆️ --- -->
 
 
-          <div class="mail-list-container">
-            <!-- ใช้ displaySharePointData ซึ่งเป็นข้อมูลที่ถูกเรียงแล้ว -->
+          <div class="mail-list-container"> 
             <div v-for="item in displaySharePointData" :key="item.id" class="mail-item" :class="{
               'selected': selectedSharePointItem?.id === item.id,
               'has-matches': hasMatches(item.id)
@@ -71,7 +70,6 @@
               <div class="mail-header">
                 <div class="mail-meta">
                   <span class="opportunity-id">{{ item.opportunityId || 'N/A' }}</span>
-                  <!-- ใช้ calculatedRevenue ที่ถูกคำนวณใน Vuex store -->
                   <span class="total-revenue">{{ formatCurrency(item.calculatedRevenue) }}</span>
                 </div>
                 <div class="match-indicator" v-if="hasMatches(item.id)">

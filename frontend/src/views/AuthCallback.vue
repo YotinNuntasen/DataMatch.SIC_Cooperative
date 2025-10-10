@@ -20,37 +20,26 @@ export default {
     ...mapActions('auth', ['initializeMsal', 'setAuth'])
   },
   async created() {
-    // 1. ตรวจสอบว่า MSAL instance พร้อมใช้งานหรือไม่ ถ้าไม่ ให้สร้างก่อน
     let msalInstance = this.msalInstance;
     if (!msalInstance) {
       msalInstance = await this.initializeMsal();
     }
-    
-    // 2. เรียกใช้ handleRedirectPromise เพื่อประมวลผลการ redirect
     if (msalInstance) {
         msalInstance.handleRedirectPromise()
           .then(response => {
-            // 3. ถ้าการ redirect สำเร็จ และได้ response กลับมา
             if (response) {
               console.log('AuthCallback successful:', response);
-              // ตั้งค่า active account
               msalInstance.setActiveAccount(response.account);
-              // commit ข้อมูลลง Vuex store
               this.setAuth(response); 
-              // 4. ส่งผู้ใช้ไปยังหน้า Data Matching
               this.$router.push({ name: 'DataMatching' });
             } else {
-                // กรณีนี้อาจเกิดขึ้นเมื่อผู้ใช้เข้าหน้านี้โดยตรง ไม่ได้มาจากการ redirect
-                // เราจะส่งเขากลับไปหน้าหลัก
+               
                 console.log('AuthCallback: No response from redirect. Navigating home.');
                 this.$router.push('/');
             }
           })
           .catch(error => {
-            // 5. หากเกิดข้อผิดพลาด
             console.error('AuthCallback error:', error);
-            // สามารถ commit error ลง store หรือแสดงข้อความบางอย่างได้
-            // แล้วส่งกลับไปหน้า Login
             this.$router.push('/');
           });
     } else {
@@ -67,7 +56,7 @@ export default {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #f0f2f5; /* สีพื้นหลังเหมือนหน้า Login */
+  background-color: #f0f2f5; 
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 

@@ -4,7 +4,7 @@ import { createApiClient } from "../utils/apiClient";
 
 class AzureService {
   constructor() {
-    this.baseURL = 'https://nbo-matching.azurewebsites.net/api'
+    this.baseURL = 'nbo-matching-fmgddgbhfkgjddhj.southeastasia-01.azurewebsites.net/api'
     this.apiClient = createApiClient({
       baseURL: this.baseURL,
       timeout: 30000,
@@ -107,7 +107,7 @@ class AzureService {
         console.error("Error details:", error.response.data);
       }
       console.log("🧪 Using mock Azure Table data for development");
-      return this.getMockAzureData(); // ตรวจสอบว่า getMockAzureData มีข้อมูล RowKey ที่ถูกต้อง
+      return this.getMockAzureData(); 
     }
   }
 
@@ -152,10 +152,9 @@ class AzureService {
   async updateMergedData(payload) {
     try {
       console.log("📤 Sending data to update/create in merged table...");
-      // ➡️ ใช้ apiClient.post โดยตรง
-      const accessToken = this.getStoredToken(); // ดึง token มาใช้
+      const accessToken = this.getStoredToken(); 
       const response = await this.apiClient.post(
-        "/customer-data/merged", // API endpoint สำหรับ bulk upsert PersonDocument
+        "/customer-data/merged", 
         payload,
         {
           headers: {
@@ -165,7 +164,6 @@ class AzureService {
         }
       );
 
-      // ➡️ ตรวจสอบโครงสร้าง response ที่ถูกต้อง
       if (response.data && response.data.success) {
         console.log("✅ Merged data updated successfully:", response.data);
         return response.data;
@@ -370,8 +368,6 @@ class AzureService {
         console.warn(
           "No access token found, cannot fetch previously merged data."
         );
-        // ควรจะ return [] หรือ throw error แล้วแต่ว่าคุณต้องการให้ handle อย่างไร
-        // การ return [] ทำให้ initializeDataAndMatches ทำงานต่อได้
         return [];
       }
 
@@ -389,7 +385,7 @@ class AzureService {
         console.log(
           `✅ Fetched ${response.data.data.length} previously merged records.`
         );
-        return response.data.data; // ➡️ คืนค่า Array ของ PersonDocument
+        return response.data.data; 
       } else {
         throw new Error(
           response.data?.message ||
@@ -398,7 +394,7 @@ class AzureService {
       }
     } catch (error) {
       console.error("❌ Failed to fetch previously merged data:", error);
-      // ในกรณีที่เกิดข้อผิดพลาด ให้คืนค่าเป็น Array ว่าง เพื่อป้องกันไม่ให้ application crash
+      
       return [];
     }
   }
