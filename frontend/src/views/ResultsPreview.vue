@@ -131,7 +131,7 @@
           <div class="history-info">
             <span class="history-filename">{{ record.fileName }}</span>
             <span class="history-details">{{ record.recordCount }} records • {{ formatDate(record.timestamp, true)
-            }}</span>
+              }}</span>
           </div>
           <div class="history-status" :class="{ 'status-success': record.success, 'status-error': !record.success }">
             {{ record.success ? '✅ Success' : '❌ Failed' }}
@@ -181,68 +181,76 @@ export default {
       'exportFile',
       'clearExportHistory'
     ]),
-    
+
     // ✅ Expose formatters from utils
     formatCurrency,
-    
+
     // ✅ Wrapper for formatDate with includeTime option
     formatDate(dateStr, includeTime = false) {
       if (!dateStr) return 'N/A';
-      
-      const options = includeTime 
+
+      const options = includeTime
         ? { dateStyle: 'medium', timeStyle: 'short' }
         : { dateStyle: 'medium' };
-      
+
       try {
         return new Intl.DateTimeFormat('en-GB', options).format(new Date(dateStr));
       } catch {
         return 'Invalid Date';
       }
     },
-    
+
     goBack() { this.$router.push({ name: 'DataMatching' }); },
-    
+
     previewData() { this.showPreview = !this.showPreview; },
-    
+
     clearHistory() {
       if (confirm('Are you sure you want to clear the export history?')) {
         this.clearExportHistory();
       }
     },
-    
+
     updateExportFormat() { this.setExportFormat(this.localExportFormat); },
-    
+
     updateFileName() { this.setFileName(this.localFileName.trim()); },
-    
+
     async handleExport() { await this.exportFile(); },
 
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
-        alert("No data available to update.");
+
+        this.$toast.warning("No data available to update.");
         return;
       }
-      
+
+
       const confirmed = confirm(
         `Are you sure you want to update/create ${this.safeExportData.length} records in Azure Table? This action cannot be undone.`
       );
-      
+
       if (!confirmed) return;
 
       this.isUpdating = true;
       try {
         const payload = this.prepareUpdatePayload();
         const result = await azureService.updateMergedData(payload);
-        alert(`Update successful! ${result.data.successCount || 0} records processed.`);
+
+
+        this.$toast.success("Update Completed");
+
         console.log("Update result:", result.data);
       } catch (error) {
         const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred during update.';
-        alert(`Update failed: ${errorMessage}`);
+
+
+        this.$toast.error(`Update failed: ${errorMessage}`);
+
         console.error("Update error:", error);
       } finally {
         this.isUpdating = false;
       }
     },
-    
+
     prepareUpdatePayload() {
       return {
         records: this.safeExportData
@@ -280,7 +288,7 @@ export default {
       };
     },
   },
-  
+
   created() {
     this.prepareExportData();
     this.localExportFormat = this.exportFormat || 'excel';
@@ -290,8 +298,6 @@ export default {
 </script>
 
 <style scoped>
-/* สไตล์เดิมทั้งหมด ไม่มีการเปลี่ยนแปลง */
-/* General Layout & Fonts */
 .results-preview {
   margin: 0 auto;
   padding: 40px;

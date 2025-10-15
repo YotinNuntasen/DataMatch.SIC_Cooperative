@@ -9,14 +9,6 @@
       <LoadingSpinner />
     </div>
     
-    <!-- Error Toast -->
-    <div v-if="error" class="error-toast" @click="clearError">
-      <div class="error-content">
-        <span class="error-icon">⚠️</span>
-        <span class="error-message">{{ error }}</span>
-        <span class="error-close">✕</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -55,20 +47,6 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 9999;
-}
-
-.error-toast {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: #ff4757;
-  color: white;
-  padding: 15px 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
-  cursor: pointer;
-  z-index: 1000;
-  animation: slideIn 0.3s ease-out;
 }
 
 .error-content {
