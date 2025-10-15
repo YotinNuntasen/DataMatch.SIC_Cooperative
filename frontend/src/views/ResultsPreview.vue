@@ -230,28 +230,22 @@ export default {
           cancelButton: 'swal2-custom-cancel-button'
         }
       });
-
-      // 2. ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชัน
       if (!result.isConfirmed) {
         return;
       }
 
-      // 3. ใช้โครงสร้าง try/catch ที่เสถียร (จากโค้ดเก่า)
       this.isUpdating = true;
       try {
         const payload = this.prepareUpdatePayload();
         
-        // ✨ เรียกใช้ service สำหรับ "Replace" ตามที่คุณต้องการ
         const response = await azureService.replaceMergedData(payload);
 
-        // ✨ แสดง Toast สำเร็จ พร้อมจำนวนข้อมูล
         const successCount = response.data?.insertedCount || payload.records.length;
         this.$toast.success(`${successCount} records have been saved successfully!`);
 
         console.log("Replace result:", response.data);
 
       } catch (error) {
-        // ✨ แสดง Toast Error อย่างปลอดภัย
         const errorMessage = error?.response?.data?.message || error?.message || 'An unknown error occurred during update.';
         this.$toast.error(`Update failed: ${errorMessage}`);
         console.error("Update error:", error);
