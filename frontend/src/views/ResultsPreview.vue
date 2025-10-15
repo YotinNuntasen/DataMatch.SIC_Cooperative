@@ -71,7 +71,7 @@
         <button @click="handleUpdate" :disabled="safeExportData.length === 0 || isUpdating"
           class="action-btn update-btn">
           <span v-if="isUpdating"><span class="spinner"></span>Updating...</span>
-          <span v-else>🗄️ Update Azure Table</span>
+          <span v-else>🗄️ Save Match Data </span>
         </button>
       </div>
     </div>
@@ -218,38 +218,48 @@ export default {
 
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
-
         this.$toast.warning("No data available to update.");
         return;
       }
 
+      // ✨ เปลี่ยนเป็น SweetAlert2 ที่สวยงาม
+      this.$swal.fire({
+        title: 'Are you sure?',
+        text: `This will replace all existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#16A34A', // สีเขียว
+        cancelButtonColor: '#DC2626', // สีแดง
+        confirmButtonText: 'Yes, update it!',
+        customClass: {
+          popup: 'swal2-custom-popup',
+          title: 'swal2-custom-title',
+          confirmButton: 'swal2-custom-confirm-button',
+          cancelButton: 'swal2-custom-cancel-button'
+        }
+      }).then(async (result) => {
+        // เช็คว่าผู้ใช้กดปุ่ม "Yes, update it!" หรือไม่
+        if (result.isConfirmed) {
+          this.isUpdating = true;
+          try {
+            const payload = this.prepareUpdatePayload();
+            const response = await azureService.replaceMergedData(payload);
 
-      const confirmed = confirm(
-        `Are you sure you want to update/create ${this.safeExportData.length} records in Azure Table? This action cannot be undone.`
-      );
+            // ✨ แสดง Toast พร้อมจำนวนข้อมูลที่บันทึกสำเร็จ
+            const successCount = response.data?.insertedCount || payload.records.length;
+            this.$toast.success(`${successCount} records have been saved successfully!`);
 
-      if (!confirmed) return;
+            console.log("Replace result:", response.data);
 
-      this.isUpdating = true;
-      try {
-        const payload = this.prepareUpdatePayload();
-        const result = await azureService.replaceMergedData(payload);
-
-
-        this.$toast.success("All data has been replaced successfully!");
-        console.log("Replace result:", result.data);
-
-        console.log("Update result:", result.data);
-      } catch (error) {
-        const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred during update.';
-
-
-        this.$toast.error(`Update failed: ${errorMessage}`);
-
-        console.error("Update error:", error);
-      } finally {
-        this.isUpdating = false;
-      }
+          } catch (error) {
+            const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred during update.';
+            this.$toast.error(`Update failed: ${errorMessage}`);
+            console.error("Update error:", error);
+          } finally {
+            this.isUpdating = false;
+          }
+        }
+      });
     },
 
     prepareUpdatePayload() {
@@ -510,6 +520,20 @@ export default {
   background-color: #15803D;
 }
 
+.swal2-custom-popup {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  border-radius: 12px !important;
+}
+.swal2-custom-title {
+  color: #1A3A5A !important;
+}
+.swal2-custom-confirm-button, .swal2-custom-cancel-button {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  padding: 10px 24px !important;
+  box-shadow: none !important; 
+}
+
 .spinner {
   width: 16px;
   height: 16px;
@@ -525,17 +549,14 @@ export default {
   }
 }
 
-/* ===== CSS สำหรับทำให้ตาราง Scroll ได้ ===== */
 .table-container {
   overflow-x: auto;
-  /* ทำให้เกิด Scrollbar แนวนอนเมื่อเนื้อหาล้น */
   width: 100%;
 }
 
 .preview-table {
   width: 100%;
   min-width: 1800px;
-  /* กำหนดความกว้างขั้นต่ำของตาราง เพื่อให้ scroll เกิดง่าย */
   border-collapse: collapse;
   font-size: 0.9rem;
 }
