@@ -117,39 +117,65 @@ namespace DataMatchBackend.Functions
         }
 
         [Function("ReplaceMergedCustomers")]
-        public async Task<HttpResponseData> ReplaceMergedCustomers(
+public async Task<HttpResponseData> ReplaceMergedCustomers(
     [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged/replace")] HttpRequestData req)
+{
+    _logger.LogInformation("Received request to replace all merged customer data.");
+
+    try
+    {
+
+        if (!IsServiceAvailable<IDataService>())
+            return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+        var authResult = await ValidateAuthenticationAsync(req);
+        if (!authResult.IsValid)
+            return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+        var request = await ParseBulkUpdateRequest(req);
+        if (request == null || !request.Records.Any())
         {
-            _logger.LogInformation("Received request to replace all merged customer data.");
-
-            try
-            {
-
-                var request = await ParseBulkUpdateRequest(req);
-                if (request == null || !request.Records.Any())
-                {
-                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body is empty or invalid. 'records' array is required.");
-                }
-
-                _logger.LogInformation("Executing replace operation with {RecordCount} new records.", request.Records.Count);
-
-                var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records);
-
-                var result = new
-                {
-                    Message = "Data replacement completed successfully.",
-                    DeletedCount = deletedCount,
-                    InsertedCount = insertedCount
-                };
-
-                return await CreateOkResponse(req, result, result.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred during the replace operation.");
-                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while replacing data.");
-            }
+            return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body is empty or invalid. 'records' array is required.");
         }
+
+
+        if (_validationService != null)
+        {
+            _logger.LogInformation("Validating {RecordCount} records before replacement.", request.Records.Count);
+            foreach (var record in request.Records)
+            {
+                var validationResult = _validationService.ValidatePersonDocument(record);
+                if (!validationResult.IsValid)
+                {
+        
+                    var errorMessage = $"Validation failed for record with RowKey '{record.RowKey}': {string.Join(", ", validationResult.Errors)}";
+                    _logger.LogWarning(errorMessage);
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, errorMessage);
+                }
+            }
+            _logger.LogInformation("All records passed validation.");
+        }
+       
+
+        _logger.LogInformation("Executing replace operation with {RecordCount} new records.", request.Records.Count);
+
+        var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records);
+
+        var result = new
+        {
+            Message = "Data replacement completed successfully.",
+            DeletedCount = deletedCount,
+            InsertedCount = insertedCount
+        };
+
+        return await CreateOkResponse(req, result, result.Message);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "An error occurred during the replace operation.");
+        return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while replacing data.");
+    }
+}
 
         [Function("CreateMergedCustomer")]
         public async Task<HttpResponseData> CreateMergedCustomer(
@@ -219,7 +245,6 @@ namespace DataMatchBackend.Functions
                 if (customer == null)
                     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Invalid customer data");
 
-                // ✅ ตรวจสอบและกำหนด RowKey จาก route parameter
                 if (string.IsNullOrEmpty(customer.RowKey) || customer.RowKey != id)
                 {
                     customer.RowKey = id;
