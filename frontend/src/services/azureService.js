@@ -398,6 +398,12 @@ class AzureService {
       return [];
     }
   }
+  async replaceMergedData(payload) {
+    console.log(`🔄 Replacing all merged data with ${payload.records.length} new records...`);
+    const headers = await this.getAuthHeaders();
+    return this.apiClient.post("/customer-data/merged/replace", payload, { headers });
+  }
+
 }
 
 export default new AzureService();

@@ -131,7 +131,7 @@
           <div class="history-info">
             <span class="history-filename">{{ record.fileName }}</span>
             <span class="history-details">{{ record.recordCount }} records • {{ formatDate(record.timestamp, true)
-              }}</span>
+            }}</span>
           </div>
           <div class="history-status" :class="{ 'status-success': record.success, 'status-error': !record.success }">
             {{ record.success ? '✅ Success' : '❌ Failed' }}
@@ -233,10 +233,11 @@ export default {
       this.isUpdating = true;
       try {
         const payload = this.prepareUpdatePayload();
-        const result = await azureService.updateMergedData(payload);
+        const result = await azureService.replaceMergedData(payload);
 
 
-        this.$toast.success("Update Completed");
+        this.$toast.success("All data has been replaced successfully!");
+        console.log("Replace result:", result.data);
 
         console.log("Update result:", result.data);
       } catch (error) {
