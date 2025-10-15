@@ -13,6 +13,85 @@ public class TableStorageService : IDataService
     private readonly ILogger<TableStorageService> _logger;
     private readonly string _connectionString;
 
+     public async Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons)
+    {
+        _logger.LogInformation("Starting ReplaceAllPersonDocumentsAsync operation. Replacing all data with {NewCount} new records.", newPersons.Count);
+
+        var allExistingRecords = new List<PersonDocument>();
+        string partitionKey = "MergedCustomer"; // PartitionKey ที่เราจะทำงานด้วย
+
+        // 1. ดึงข้อมูลเก่าทั้งหมดออกมาเพื่อเตรียมลบ
+        _logger.LogInformation("Fetching all existing documents with PartitionKey: {PartitionKey}", partitionKey);
+        await foreach (var entity in _personDocumentTableClient.QueryAsync<PersonDocument>(filter: $"PartitionKey eq '{partitionKey}'"))
+        {
+            allExistingRecords.Add(entity);
+        }
+        _logger.LogInformation("Found {ExistingCount} records to delete.", allExistingRecords.Count);
+
+        var deletedCount = 0;
+        var insertedCount = 0;
+
+        // 2. ลบข้อมูลเก่าทั้งหมด (Batch Delete)
+        if (allExistingRecords.Any())
+        {
+            var deleteTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
+            var batch = new List<TableTransactionAction>();
+
+            foreach (var record in allExistingRecords)
+            {
+                batch.Add(new TableTransactionAction(TableTransactionActionType.Delete, record));
+                if (batch.Count == 100)
+                {
+                    deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
+                    batch = new List<TableTransactionAction>();
+                }
+            }
+            if (batch.Any())
+            {
+                deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
+            }
+
+            await Task.WhenAll(deleteTasks);
+            deletedCount = allExistingRecords.Count;
+            _logger.LogInformation("Successfully deleted {DeletedCount} records.", deletedCount);
+        }
+
+        // 3. เพิ่มข้อมูลใหม่ทั้งหมด (Batch Insert)
+        if (newPersons.Any())
+        {
+            var insertTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
+            var batch = new List<TableTransactionAction>();
+
+            foreach (var record in newPersons)
+            {
+                // ตรวจสอบค่าพื้นฐาน
+                record.PartitionKey = partitionKey;
+                if (string.IsNullOrEmpty(record.RowKey))
+                {
+                    record.RowKey = Guid.NewGuid().ToString();
+                }
+                record.Timestamp = DateTimeOffset.UtcNow;
+
+                batch.Add(new TableTransactionAction(TableTransactionActionType.UpsertReplace, record));
+                if (batch.Count == 100)
+                {
+                    insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
+                    batch = new List<TableTransactionAction>();
+                }
+            }
+            if (batch.Any())
+            {
+                insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
+            }
+
+            await Task.WhenAll(insertTasks);
+            insertedCount = newPersons.Count;
+            _logger.LogInformation("Successfully inserted {InsertedCount} new records.", insertedCount);
+        }
+
+        return (deletedCount, insertedCount);
+    }
+
     public async Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId)
         {
             if (string.IsNullOrEmpty(opportunityId))
@@ -34,7 +113,7 @@ public class TableStorageService : IDataService
     {
         try
         {
-            // ✅ ตรวจสอบและกำหนดค่าเริ่มต้น
+           
             if (string.IsNullOrEmpty(person.PartitionKey))
                 person.PartitionKey = "MergedCustomer";
 
@@ -44,13 +123,9 @@ public class TableStorageService : IDataService
                 person.Created = DateTime.UtcNow;
             }
 
-            // ✅ กำหนดค่า Modified เป็น UTC
             person.Modified = DateTime.UtcNow;
-
-            // ✅ แปลง DateTime ให้เป็น UTC
             person = NormalizeDateTimesToUtc(person);
 
-            // ✅ Log ข้อมูลที่จะ save เพื่อ debug
             _logger.LogInformation("Saving PersonDocument: RowKey={RowKey}, Customer={Customer}, DocumentNo={DocumentNo}",
                 person.RowKey, person.CustShortDimName, person.documentNo);
 
@@ -70,7 +145,7 @@ public class TableStorageService : IDataService
     /// </summary>
     private PersonDocument NormalizeDateTimesToUtc(PersonDocument person)
     {
-        // แปลง DateTime fields ที่เป็น nullable ให้เป็น UTC
+
         person.DocumentDate = NormalizeDateTime(person.DocumentDate);
         person.Created = NormalizeDateTime(person.Created);
         person.Modified = NormalizeDateTime(person.Modified);

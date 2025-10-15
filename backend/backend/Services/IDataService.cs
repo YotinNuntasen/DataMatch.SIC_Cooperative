@@ -42,4 +42,5 @@ public interface IDataService
     Task<bool> IsHealthyAsync();
     Task<Dictionary<string, object>> GetHealthDetailsAsync();
     Task<bool> CreateBackupAsync(string backupName);
+    Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons);
 }
