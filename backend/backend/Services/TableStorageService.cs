@@ -14,28 +14,23 @@ public class TableStorageService : IDataService
     private readonly string _connectionString;
 
 
+    // ในไฟล์ Services/TableStorageService.cs
+
     public async Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons)
     {
-        if (!newPersons.Any())
-        {
-            _logger.LogWarning("ReplaceAllPersonDocumentsAsync called with no new records. Aborting operation.");
-            return (0, 0);
-        }
-
-        string partitionKey = newPersons.First().PartitionKey;
-        if (string.IsNullOrEmpty(partitionKey))
-        {
-   
-            partitionKey = "FromSQL";
-        }
+        // ✅ --- นี่คือจุดที่แก้ไข ---
+        // บังคับให้ฟังก์ชันทำงานกับ PartitionKey ที่ถูกต้อง ("FromSQL") เสมอ
+        // ไม่ว่าข้อมูลที่ส่งมาจาก Frontend จะมีค่าอะไรก็ตาม
+        string partitionKey = "FromSQL";
         // -------------------------
 
         _logger.LogInformation("Starting Replace operation on PartitionKey '{PartitionKey}' with {NewCount} new records.", partitionKey, newPersons.Count);
 
-        var allExistingRecords = new List<PersonDocument>();
+        var allExistingRecords = new List<ITableEntity>();
 
+        // 1. ดึงข้อมูลเก่าทั้งหมดจาก PartitionKey "FromSQL"
         _logger.LogInformation("Fetching all existing documents with PartitionKey: {PartitionKey}", partitionKey);
-        await foreach (var entity in _personDocumentTableClient.QueryAsync<PersonDocument>(filter: $"PartitionKey eq '{partitionKey}'"))
+        await foreach (var entity in _personDocumentTableClient.QueryAsync<TableEntity>(filter: $"PartitionKey eq '{partitionKey}'"))
         {
             allExistingRecords.Add(entity);
         }
@@ -44,6 +39,7 @@ public class TableStorageService : IDataService
         var deletedCount = 0;
         var insertedCount = 0;
 
+        // 2. ลบข้อมูลเก่าทั้งหมด (Batch Delete)
         if (allExistingRecords.Any())
         {
             var deleteTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
@@ -63,39 +59,52 @@ public class TableStorageService : IDataService
                 deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
             }
 
-            await Task.WhenAll(deleteTasks);
-            deletedCount = allExistingRecords.Count;
-            _logger.LogInformation("Successfully deleted {DeletedCount} records from PartitionKey '{PartitionKey}'.", deletedCount, partitionKey);
+            var responses = await Task.WhenAll(deleteTasks);
+            // ตรวจสอบว่าทุก transaction สำเร็จ
+            if (responses.All(r => !r.HasValue || (r.Value != null && !r.GetRawResponse().IsError)))
+            {
+                deletedCount = allExistingRecords.Count;
+                _logger.LogInformation("Successfully deleted {DeletedCount} records from PartitionKey '{PartitionKey}'.", deletedCount, partitionKey);
+            }
+            else
+            {
+                _logger.LogError("One or more delete transactions failed during replace operation.");
+                throw new Exception("Failed to delete existing records during replace operation.");
+            }
         }
 
-        var insertTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
-        var insertBatch = new List<TableTransactionAction>();
-
-        foreach (var record in newPersons)
+        // 3. เพิ่มข้อมูลใหม่ทั้งหมด (Batch Insert)
+        if (newPersons.Any())
         {
-            
-            record.PartitionKey = partitionKey;
-            if (string.IsNullOrEmpty(record.RowKey))
-            {
-                record.RowKey = Guid.NewGuid().ToString();
-            }
-            record.Timestamp = DateTimeOffset.UtcNow;
+            var insertTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
+            var insertBatch = new List<TableTransactionAction>();
 
-            insertBatch.Add(new TableTransactionAction(TableTransactionActionType.UpsertReplace, record));
-            if (insertBatch.Count == 100)
+            foreach (var record in newPersons)
+            {
+                // บังคับให้ PartitionKey เป็นค่าที่ถูกต้องเสมอ
+                record.PartitionKey = partitionKey;
+                if (string.IsNullOrEmpty(record.RowKey))
+                {
+                    record.RowKey = Guid.NewGuid().ToString();
+                }
+                record.Timestamp = DateTimeOffset.UtcNow;
+
+                insertBatch.Add(new TableTransactionAction(TableTransactionActionType.UpsertReplace, record));
+                if (insertBatch.Count == 100)
+                {
+                    insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(insertBatch));
+                    insertBatch = new List<TableTransactionAction>();
+                }
+            }
+            if (insertBatch.Any())
             {
                 insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(insertBatch));
-                insertBatch = new List<TableTransactionAction>();
             }
-        }
-        if (insertBatch.Any())
-        {
-            insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(insertBatch));
-        }
 
-        await Task.WhenAll(insertTasks);
-        insertedCount = newPersons.Count;
-        _logger.LogInformation("Successfully inserted {InsertedCount} new records into PartitionKey '{PartitionKey}'.", insertedCount, partitionKey);
+            await Task.WhenAll(insertTasks);
+            insertedCount = newPersons.Count;
+            _logger.LogInformation("Successfully inserted {InsertedCount} new records into PartitionKey '{PartitionKey}'.", insertedCount, partitionKey);
+        }
 
         return (deletedCount, insertedCount);
     }
