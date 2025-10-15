@@ -131,7 +131,7 @@
           <div class="history-info">
             <span class="history-filename">{{ record.fileName }}</span>
             <span class="history-details">{{ record.recordCount }} records • {{ formatDate(record.timestamp, true)
-              }}</span>
+            }}</span>
           </div>
           <div class="history-status" :class="{ 'status-success': record.success, 'status-error': !record.success }">
             {{ record.success ? '✅ Success' : '❌ Failed' }}
@@ -182,17 +182,13 @@ export default {
       'clearExportHistory'
     ]),
 
-    // ✅ Expose formatters from utils
     formatCurrency,
 
-    // ✅ Wrapper for formatDate with includeTime option
     formatDate(dateStr, includeTime = false) {
       if (!dateStr) return 'N/A';
-
       const options = includeTime
         ? { dateStyle: 'medium', timeStyle: 'short' }
         : { dateStyle: 'medium' };
-
       try {
         return new Intl.DateTimeFormat('en-GB', options).format(new Date(dateStr));
       } catch {
@@ -216,50 +212,56 @@ export default {
 
     async handleExport() { await this.exportFile(); },
 
+    // ✅ --- นี่คือเวอร์ชันที่แก้ไขแล้ว ---
     async handleUpdate() {
-    if (this.safeExportData.length === 0) {
-      this.$toast.warning("No data available to update.");
-      return;
-    }
-
-    const result = await this.$swal.fire({
-      title: 'Are you sure?',
-      text: `This will replace all existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#16A34A',
-      cancelButtonColor: '#DC2626',
-      confirmButtonText: 'Yes, update it!',
-      customClass: {
-        popup: 'swal2-custom-popup',
-        title: 'swal2-custom-title',
-        confirmButton: 'swal2-custom-confirm-button',
-        cancelButton: 'swal2-custom-cancel-button'
+      if (this.safeExportData.length === 0) {
+        this.$toast.warning("No data available to update.");
+        return;
       }
-    });
 
-    if (!result.isConfirmed) {
-      return; 
-    }
+      // 1. ใช้ await เพื่อรอผลลัพธ์จาก SweetAlert โดยตรง
+      const result = await this.$swal.fire({
+        title: 'Are you sure?',
+        text: `This will REPLACE ALL existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#16A34A',
+        cancelButtonColor: '#DC2626',
+        confirmButtonText: 'Yes, update it!',
+        customClass: {
+          popup: 'swal2-custom-popup',
+          title: 'swal2-custom-title',
+          confirmButton: 'swal2-custom-confirm-button',
+          cancelButton: 'swal2-custom-cancel-button'
+        }
+      });
 
-    this.isUpdating = true;
-    try {
-      const payload = this.prepareUpdatePayload();
-      const response = await azureService.replaceMergedData(payload);
+      // 2. ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชัน
+      if (!result.isConfirmed) {
+        return;
+      }
 
-      const successCount = response.data?.insertedCount || payload.records.length;
-      this.$toast.success(`${successCount} records have been saved successfully!`);
+      // 3. ทำงานต่อเมื่อผู้ใช้กด "Yes"
+      this.isUpdating = true;
+      try {
+        const payload = this.prepareUpdatePayload();
 
-      console.log("Replace result:", response.data);
+        // ✨ เรียกใช้ service สำหรับ "Replace"
+        const response = await azureService.replaceMergedData(payload);
 
-    } catch (error) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'An unknown error occurred during update.';
-      this.$toast.error(`Update failed: ${errorMessage}`);
-      console.error("Update error:", error);
-    } finally {
-      this.isUpdating = false;
-    }
-  },
+        const successCount = response.data?.insertedCount || payload.records.length;
+        this.$toast.success(`${successCount} records have been saved successfully!`);
+
+        console.log("Replace result:", response.data);
+
+      } catch (error) {
+        const errorMessage = error?.response?.data?.message || error?.message || 'An unknown error occurred during update.';
+        this.$toast.error(`Update failed: ${errorMessage}`);
+        console.error("Update error:", error);
+      } finally {
+        this.isUpdating = false;
+      }
+    },
 
     prepareUpdatePayload() {
       return {
