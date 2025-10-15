@@ -217,44 +217,49 @@ export default {
     async handleExport() { await this.exportFile(); },
 
     async handleUpdate() {
-      if (this.safeExportData.length === 0) {
-        this.$toast.warning("No data available to update.");
-        return;
+    if (this.safeExportData.length === 0) {
+      this.$toast.warning("No data available to update.");
+      return;
+    }
+
+    const result = await this.$swal.fire({
+      title: 'Are you sure?',
+      text: `This will replace all existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#16A34A',
+      cancelButtonColor: '#DC2626',
+      confirmButtonText: 'Yes, update it!',
+      customClass: {
+        popup: 'swal2-custom-popup',
+        title: 'swal2-custom-title',
+        confirmButton: 'swal2-custom-confirm-button',
+        cancelButton: 'swal2-custom-cancel-button'
       }
+    });
 
-      // ✅ 1. เก็บ "this" ไว้ในตัวแปร self
-      const self = this;
+    if (!result.isConfirmed) {
+      return; 
+    }
 
-      this.$swal.fire({
-        title: 'Are you sure?',
-        text: `This will replace all existing data with these ${self.safeExportData.length} records. This action cannot be undone.`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#16A34A',
-        cancelButtonColor: '#DC2626',
-        confirmButtonText: 'Yes, update it!',
-      }).then(async (result) => {
-        if (result.isConfirmed) {
-          self.isUpdating = true;
-          try {
-            const payload = self.prepareUpdatePayload();
-            const response = await azureService.replaceMergedData(payload);
+    this.isUpdating = true;
+    try {
+      const payload = this.prepareUpdatePayload();
+      const response = await azureService.replaceMergedData(payload);
 
-            const successCount = response.data?.insertedCount || payload.records.length;
-            self.$toast.success(`${successCount} records have been saved successfully!`);
+      const successCount = response.data?.insertedCount || payload.records.length;
+      this.$toast.success(`${successCount} records have been saved successfully!`);
 
-            console.log("Replace result:", response.data);
-          } catch (error) {
-            const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred during update.';
+      console.log("Replace result:", response.data);
 
-            self.$toast.error(`Update failed: ${errorMessage}`);
-            console.error("Update error:", error);
-          } finally {
-            self.isUpdating = false;
-          }
-        }
-      });
-    },
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'An unknown error occurred during update.';
+      this.$toast.error(`Update failed: ${errorMessage}`);
+      console.error("Update error:", error);
+    } finally {
+      this.isUpdating = false;
+    }
+  },
 
     prepareUpdatePayload() {
       return {
