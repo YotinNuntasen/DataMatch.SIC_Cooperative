@@ -212,14 +212,12 @@ export default {
 
     async handleExport() { await this.exportFile(); },
 
-    // ✅ --- นี่คือเวอร์ชันที่แก้ไขแล้ว ---
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
         this.$toast.warning("No data available to update.");
         return;
       }
 
-      // 1. ใช้ await เพื่อรอผลลัพธ์จาก SweetAlert โดยตรง
       const result = await this.$swal.fire({
         title: 'Are you sure?',
         text: `This will REPLACE ALL existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
@@ -236,18 +234,14 @@ export default {
         }
       });
 
-      // 2. ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชัน
       if (!result.isConfirmed) {
         return;
       }
 
-      // 3. ทำงานต่อเมื่อผู้ใช้กด "Yes"
       this.isUpdating = true;
       try {
-        const payload = this.prepareUpdatePayload();
-
-        // ✨ เรียกใช้ service สำหรับ "Replace"
-        const response = await azureService.replaceMergedData(payload);
+        const payload = this.prepareUpdatePayload()
+        const response = await azureService.updateMergedData(payload);
 
         const successCount = response.data?.insertedCount || payload.records.length;
         this.$toast.success(`${successCount} records have been saved successfully!`);
