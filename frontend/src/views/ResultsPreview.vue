@@ -197,27 +197,24 @@ export default {
     },
 
     goBack() { this.$router.push({ name: 'DataMatching' }); },
-
     previewData() { this.showPreview = !this.showPreview; },
-
     clearHistory() {
       if (confirm('Are you sure you want to clear the export history?')) {
         this.clearExportHistory();
       }
     },
-
     updateExportFormat() { this.setExportFormat(this.localExportFormat); },
-
     updateFileName() { this.setFileName(this.localFileName.trim()); },
-
     async handleExport() { await this.exportFile(); },
 
+    // ✅ --- นี่คือเวอร์ชันที่รวมส่วนที่ดีที่สุดเข้าด้วยกัน ---
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
         this.$toast.warning("No data available to update.");
         return;
       }
 
+      // 1. ใช้ await เพื่อรอผลลัพธ์จาก SweetAlert (จากโค้ดใหม่)
       const result = await this.$swal.fire({
         title: 'Are you sure?',
         text: `This will REPLACE ALL existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
@@ -234,21 +231,27 @@ export default {
         }
       });
 
+      // 2. ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชัน
       if (!result.isConfirmed) {
         return;
       }
 
+      // 3. ใช้โครงสร้าง try/catch ที่เสถียร (จากโค้ดเก่า)
       this.isUpdating = true;
       try {
-        const payload = this.prepareUpdatePayload()
-        const response = await azureService.updateMergedData(payload);
+        const payload = this.prepareUpdatePayload();
+        
+        // ✨ เรียกใช้ service สำหรับ "Replace" ตามที่คุณต้องการ
+        const response = await azureService.replaceMergedData(payload);
 
+        // ✨ แสดง Toast สำเร็จ พร้อมจำนวนข้อมูล
         const successCount = response.data?.insertedCount || payload.records.length;
         this.$toast.success(`${successCount} records have been saved successfully!`);
 
         console.log("Replace result:", response.data);
 
       } catch (error) {
+        // ✨ แสดง Toast Error อย่างปลอดภัย
         const errorMessage = error?.response?.data?.message || error?.message || 'An unknown error occurred during update.';
         this.$toast.error(`Update failed: ${errorMessage}`);
         console.error("Update error:", error);
