@@ -60,15 +60,15 @@
             </div>
         </div>
 
-        <!-- Modal เดิม (ไม่มีการแก้ไข) -->
+       
         <div v-if="showCompareModal" class="modal-overlay" @click="closeModal">
-            <!-- Modal content เดิม -->
+          
         </div>
     </div>
 </template>
 
 <script>
-// ส่วน <script> ไม่มีการแก้ไข สามารถคงไว้เหมือนเดิมได้
+
 import AzureDataRowCard from './AzureDataRowCard.vue';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import {
@@ -248,42 +248,30 @@ export default {
 <style scoped>
 .table-container {
     height: 100%;
-    /* เพิ่มบรรทัดนี้ */
     margin-top: 16px;
     border-radius: 8px;
     background-color: white;
     display: flex;
-    /* เพิ่มบรรทัดนี้ */
     flex-direction: column;
-    /* เพิ่มบรรทัดนี้ */
 }
 
 .comparison-legend {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border: 1px solid #dee2e6;
     border-radius: 8px;
-    /* ลดความโค้งมนลงเล็กน้อย */
     padding: 8px 16px;
-    /* ลด padding บน-ล่าง */
     margin-bottom: 12px;
-    /* ลดระยะห่างด้านล่าง */
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
     flex-shrink: 0;
 }
 
 .legend-items {
     display: flex;
-    /* เปลี่ยนเป็น flex เพื่อให้อยู่บรรทัดเดียวกัน */
     flex-wrap: wrap;
-    /* ทำให้ขึ้นบรรทัดใหม่ได้ถ้าไม่พอ */
     gap: 20px;
-    /* เพิ่มระยะห่างระหว่าง items */
     justify-content: center;
-    /* จัดให้อยู่กึ่งกลาง */
     align-items: center;
 }
-
-/* สิ้นสุดการแก้ไข Style */
 
 .legend-item {
     display: flex;

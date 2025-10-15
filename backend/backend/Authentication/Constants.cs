@@ -42,7 +42,7 @@ internal static class Constants
 
     internal static string[] scopes => new[]
     {
-        "https://graph.microsoft.com/.default"
+        Environment.GetEnvironmentVariable("GRAPH_SCOPES") ?? "https://sicth.sharepoint.com/.default"
     };
 
     #endregion
