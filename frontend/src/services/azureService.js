@@ -398,10 +398,32 @@ class AzureService {
       return [];
     }
   }
-  async replaceMergedData(payload) {
-    console.log(`🔄 Replacing all merged data with ${payload.records.length} new records...`);
-    const headers = await this.getAuthHeaders();
-    return this.apiClient.post("/customer-data/merged/replace", payload, { headers });
+   async replaceMergedData(payload) {
+    try {
+      console.log(`🔄 Replacing all merged data with ${payload.records.length} new records...`);
+      
+      const accessToken = this.getStoredToken(); 
+      const response = await this.apiClient.post(
+        "/customer-data/merged/replace", 
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      
+      console.log(`✅ Replace operation successful`);
+      return response; 
+
+    } catch (error) {
+      console.error("❌ Failed to replace merged data:", error);
+     
+      throw new Error(
+        error.response?.data?.message || "Failed to replace merged data."
+      );
+    }
   }
 
 }
