@@ -17,10 +17,10 @@ namespace DataMatchBackend.Services
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<SharePointRestService> _logger;
-        private readonly string _listTitle; 
-        private readonly string _customerListTitle; 
+        private readonly string _listTitle;
+        private readonly string _customerListTitle;
 
-        
+
         private record OpportunityRawData(
             JsonElement Json, // เก็บ JsonElement ทั้งก้อนไว้ก่อน
             int CustomerId // ดึง CustomerId ออกมาเลย
@@ -65,7 +65,7 @@ namespace DataMatchBackend.Services
                     "Next_x0020_Action_x0020_Date", "Suspend",
                     "Suspend_x0020_reason", "Step2_x002d_Entry_x002d_Date", "Step3_x002d_Entry_x002d_Date",
                     "Step4_x002d_Entry_x002d_Date", "Step5_x002d_Entry_x002d_Date", "S6_x002d_Eval_x002d_Entry_x002d_",
-                    "S7_x002d_DI_x002d_Entry_x002d_Da", "S8_x002d_PrePro_x002d_Entry_x002", 
+                    "S7_x002d_DI_x002d_Entry_x002d_Da", "S8_x002d_PrePro_x002d_Entry_x002",
                     "S9_x002d_DWIN_x002d_Entry_x002d_",
                     "Source_x0020_of_x0020_Lead", "MassProductionDate", "Closed_x002d_Lost",
                     "Closed_x002d_Lost_x0020_Reason", "Closed_x002d_LostDate", "Closed_x002d_LostCommonReason",
@@ -108,7 +108,7 @@ namespace DataMatchBackend.Services
                     .Distinct()
                     .ToList();
 
-                // ดึง Sale Person Name โดยใช้ Customer Ids ที่รวบรวมได้
+
                 var salePersonNameByCustomerId = await GetSalePersonNamesByCustomerIdsAsync(userToken, customerIds);
 
                 var contacts = rawOpportunities
@@ -126,37 +126,30 @@ namespace DataMatchBackend.Services
                     .WithMetadata("itemCount", contacts.Count)
                     .WithMetadata("listName", _listTitle);
             }
+            catch (HttpRequestException httpEx)
+            {
+                _logger.LogError(httpEx, "SharePoint HTTP Request Failed. Status: {StatusCode}", httpEx.StatusCode);
+
+                var errorCode = httpEx.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.Unauthorized => "SP_UNAUTHORIZED",
+                    System.Net.HttpStatusCode.Forbidden => "SP_FORBIDDEN",
+                    System.Net.HttpStatusCode.NotFound => "SP_NOT_FOUND",
+                    _ => "SP_HTTP_ERROR"
+                };
+
+                return SharePointApiResponse<List<SharePointContact>>.Error(
+                    $"SharePoint request failed (HTTP {httpEx.StatusCode}): {httpEx.Message}",
+                    errorCode);
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error accessing SharePoint with User Context");
+                _logger.LogError(ex, "Unexpected critical error accessing SharePoint.");
                 return SharePointApiResponse<List<SharePointContact>>.Error(
-                    "An unexpected error occurred while accessing SharePoint.",
-                    "SP_UNEXPECTED_ERROR");
+                    "A critical unexpected error occurred while processing SharePoint data.",
+                    "SP_CRITICAL_ERROR");
             }
         }
-
-
-        // private async Task<Dictionary<int, string>> GetSalePersonNamesByIdsAsync(string userToken, IEnumerable<int> ids)
-        // {
-        //     if (!ids.Any())
-        //     {
-        //         return new Dictionary<int, string>();
-        //     }
-
-
-        //     var filterQuery = string.Join(" or ", ids.Select(id => $"Id eq {id}"));
-
-        //     var endpoint = $"_api/web/lists/getbytitle('{_salePersonListTitle}')/items?$filter={filterQuery}&$select=Id,Title"; 
-        //     _logger.LogWarning("GetSalePersonNamesByIdsAsync called, this might indicate a mismatch in data structure assumption.");
-
-        //     var salePersons = await GetItemsFromSharePointAsync(endpoint, userToken, (item) => new
-        //     {
-        //         Id = GetInt(item, "Id"),
-        //         Title = GetString(item, "Title")
-        //     });
-
-        //     return salePersons.ToDictionary(sp => sp.Id, sp => sp.Title);
-        // }
 
         /// <summary>
         /// ดึงชื่อ Sale Person (User Field) จาก Customer List โดยใช้ Customer IDs
@@ -172,7 +165,7 @@ namespace DataMatchBackend.Services
 
             var allSalePersonNames = new Dictionary<int, string>();
             string salePersonLookupUserField = "Sale_x0020_Person";
-            
+
             var endpoint = $"_api/web/lists/getbytitle('{_customerListTitle}')/items?" +
                            $"$select=Id,{salePersonLookupUserField}/Title&" +
                            $"$expand={salePersonLookupUserField}";
@@ -187,7 +180,6 @@ namespace DataMatchBackend.Services
                     SalePersonName = GetStringFromNestedLookup(item, salePersonLookupUserField, "Title")
                 });
 
-                // ขั้นที่ 2: Filter ในฝั่ง .NET Code โดยใช้ Customer IDs ที่เราต้องการ
                 foreach (var customerItem in allCustomerData)
                 {
                     if (uniqueCustomerIds.Contains(customerItem.CustomerId) &&
@@ -201,13 +193,12 @@ namespace DataMatchBackend.Services
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Error getting ALL customer data. Endpoint: {endpoint}. Error: {message}", endpoint, ex.Message);
-                // อาจจะพิจารณาโยน Exception นี้ขึ้นไป หรือคืนค่าว่างเปล่า
-                throw; // โยน Exception เพื่อให้ GetOpportunityListAsync รับรู้ปัญหา
+                throw new InvalidOperationException($"Failed to load customer list dependencies for Sale Person lookup (HTTP Status: {ex.StatusCode}). Check Customer List name ('{_customerListTitle}') and field access.", ex);
             }
 
             return allSalePersonNames;
         }
-               private string GetStringFromNestedLookup(JsonElement element, string key, string subKey)
+        private string GetStringFromNestedLookup(JsonElement element, string key, string subKey)
         {
             if (element.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.Object)
             {

@@ -56,6 +56,7 @@ namespace DataMatchBackend.Functions
 
                 _logger.LogInformation("Calling SharePoint service to get opportunity list...");
                 var result = await _sharePointService!.GetOpportunityListAsync(userToken); 
+                
                 if (result.Success)
                 {
                     
