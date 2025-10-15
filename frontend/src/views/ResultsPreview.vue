@@ -131,7 +131,7 @@
           <div class="history-info">
             <span class="history-filename">{{ record.fileName }}</span>
             <span class="history-details">{{ record.recordCount }} records • {{ formatDate(record.timestamp, true)
-            }}</span>
+              }}</span>
           </div>
           <div class="history-status" :class="{ 'status-success': record.success, 'status-error': !record.success }">
             {{ record.success ? '✅ Success' : '❌ Failed' }}
@@ -222,41 +222,35 @@ export default {
         return;
       }
 
-      // ✨ เปลี่ยนเป็น SweetAlert2 ที่สวยงาม
+      // ✅ 1. เก็บ "this" ไว้ในตัวแปร self
+      const self = this;
+
       this.$swal.fire({
         title: 'Are you sure?',
-        text: `This will replace all existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
+        text: `This will replace all existing data with these ${self.safeExportData.length} records. This action cannot be undone.`,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#16A34A', // สีเขียว
-        cancelButtonColor: '#DC2626', // สีแดง
+        confirmButtonColor: '#16A34A',
+        cancelButtonColor: '#DC2626',
         confirmButtonText: 'Yes, update it!',
-        customClass: {
-          popup: 'swal2-custom-popup',
-          title: 'swal2-custom-title',
-          confirmButton: 'swal2-custom-confirm-button',
-          cancelButton: 'swal2-custom-cancel-button'
-        }
       }).then(async (result) => {
-        // เช็คว่าผู้ใช้กดปุ่ม "Yes, update it!" หรือไม่
         if (result.isConfirmed) {
-          this.isUpdating = true;
+          self.isUpdating = true;
           try {
-            const payload = this.prepareUpdatePayload();
+            const payload = self.prepareUpdatePayload();
             const response = await azureService.replaceMergedData(payload);
 
-            // ✨ แสดง Toast พร้อมจำนวนข้อมูลที่บันทึกสำเร็จ
             const successCount = response.data?.insertedCount || payload.records.length;
-            this.$toast.success(`${successCount} records have been saved successfully!`);
+            self.$toast.success(`${successCount} records have been saved successfully!`);
 
             console.log("Replace result:", response.data);
-
           } catch (error) {
             const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred during update.';
-            this.$toast.error(`Update failed: ${errorMessage}`);
+
+            self.$toast.error(`Update failed: ${errorMessage}`);
             console.error("Update error:", error);
           } finally {
-            this.isUpdating = false;
+            self.isUpdating = false;
           }
         }
       });
@@ -524,14 +518,17 @@ export default {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   border-radius: 12px !important;
 }
+
 .swal2-custom-title {
   color: #1A3A5A !important;
 }
-.swal2-custom-confirm-button, .swal2-custom-cancel-button {
+
+.swal2-custom-confirm-button,
+.swal2-custom-cancel-button {
   border-radius: 8px !important;
   font-weight: 600 !important;
   padding: 10px 24px !important;
-  box-shadow: none !important; 
+  box-shadow: none !important;
 }
 
 .spinner {
