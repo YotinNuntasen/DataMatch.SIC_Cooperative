@@ -17,99 +17,94 @@ public class TableStorageService : IDataService
 
     public async Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons, string partitionKey)
     {
-
+        // 1. ตรวจสอบว่า PartitionKey ที่ส่งมาถูกต้อง (ซึ่งควรจะเป็น "MergedData")
         if (string.IsNullOrEmpty(partitionKey))
         {
             throw new ArgumentException("PartitionKey cannot be null or empty for replace operation.", nameof(partitionKey));
         }
 
-        _logger.LogInformation("Startin g Replace operation on PartitionKey '{PartitionKey}' with {NewCount} new records.", partitionKey, newPersons.Count);
+        _logger.LogInformation("Starting Replace operation with {NewCount} new records. ALL existing data will be deleted.", newPersons.Count);
 
         var allExistingRecords = new List<ITableEntity>();
 
-
-        _logger.LogInformation("Fetching existing documents with PartitionKey: {PartitionKey}", partitionKey);
-        await foreach (var entity in _personDocumentTableClient.QueryAsync<TableEntity>(filter: $"PartitionKey eq '{partitionKey}'"))
+        // 2. [ปรับปรุง] ดึงข้อมูล *ทั้งหมดทุก Partition* เพื่อเตรียมลบ
+        // เราจะใช้ Query ที่ไม่ระบุ filter เพื่อดึงข้อมูลทั้งหมดในตาราง
+        _logger.LogInformation("Fetching ALL existing documents from the table '{TableName}' for deletion.", _personDocumentTableClient.Name);
+        await foreach (var entity in _personDocumentTableClient.QueryAsync<TableEntity>())
         {
             allExistingRecords.Add(entity);
         }
-
-
-        var opportunityIds = newPersons.Select(p => p.OpportunityId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-
-        foreach (var oppId in opportunityIds)
-        {
-
-            string cleanupFilter = $"PartitionKey eq '{oppId}'";
-            _logger.LogInformation("Also fetching legacy documents for cleanup with PartitionKey: {LegacyPartitionKey}", oppId);
-            await foreach (var legacyEntity in _personDocumentTableClient.QueryAsync<TableEntity>(filter: cleanupFilter))
-            {
-
-                if (!allExistingRecords.Any(e => e.PartitionKey == legacyEntity.PartitionKey && e.RowKey == legacyEntity.RowKey))
-                {
-                    allExistingRecords.Add(legacyEntity);
-                }
-            }
-        }
-
-
-        _logger.LogInformation("Found {ExistingCount} total records to delete (including legacy data).", allExistingRecords.Count);
+        _logger.LogInformation("Found {ExistingCount} total records to delete.", allExistingRecords.Count);
 
         var deletedCount = 0;
         var insertedCount = 0;
 
-        // 3. ส่วนของการลบข้อมูล (Delete Logic) ทั้งหมดที่รวบรวมมา (เหมือนเดิม)
+        // 3. [เหมือนเดิม] ส่วนของการลบข้อมูล (Delete Logic) ทั้งหมดที่รวบรวมมา
         if (allExistingRecords.Any())
         {
             var deleteTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
-            var batch = new List<TableTransactionAction>();
 
-            foreach (var record in allExistingRecords)
+            // แบ่งการลบเป็นกลุ่มๆ กลุ่มละไม่เกิน 100 records (ข้อจำกัดของ Table Transaction)
+            // สร้าง List ของ Transaction ของแต่ละ PartitionKey
+            var batchesByPartition = allExistingRecords
+                .GroupBy(e => e.PartitionKey)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var partitionGroup in batchesByPartition)
             {
-                batch.Add(new TableTransactionAction(TableTransactionActionType.Delete, record));
-                if (batch.Count == 100)
+                _logger.LogInformation("Deleting {Count} records from PartitionKey '{Partition}'.", partitionGroup.Value.Count, partitionGroup.Key);
+                var batch = new List<TableTransactionAction>();
+                foreach (var recordToDelete in partitionGroup.Value)
+                {
+                    batch.Add(new TableTransactionAction(TableTransactionActionType.Delete, recordToDelete));
+                    if (batch.Count == 100)
+                    {
+                        deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
+                        batch = new List<TableTransactionAction>();
+                    }
+                }
+                if (batch.Any())
                 {
                     deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
-                    batch = new List<TableTransactionAction>();
                 }
-            }
-            if (batch.Any())
-            {
-                deleteTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(batch));
             }
 
             var responses = await Task.WhenAll(deleteTasks);
 
-            if (responses.All(r => !r.HasValue || (r.Value != null && !r.GetRawResponse().IsError)))
+            // ตรวจสอบผลลัพธ์การลบ
+            if (responses.All(r => r != null && !r.GetRawResponse().IsError))
             {
                 deletedCount = allExistingRecords.Count;
                 _logger.LogInformation("Successfully deleted {DeletedCount} records.", deletedCount);
             }
             else
             {
-                _logger.LogError("One or more delete transactions failed during replace operation.");
-                throw new Exception("Failed to delete existing records during replace operation.");
+                _logger.LogError("One or more delete transactions failed during the replace operation.");
+                // สามารถเพิ่ม Logic การจัดการ Error ที่ละเอียดขึ้นได้ที่นี่
+                throw new InvalidOperationException("Failed to delete all existing records during the replace operation.");
             }
         }
 
-
+        // 4. [ปรับปรุง] ส่วนของการบันทึกข้อมูลชุดใหม่ (Insert Logic)
         if (newPersons.Any())
         {
-
             var insertTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
             var insertBatch = new List<TableTransactionAction>();
 
-            foreach (var record in newPersons)
+            foreach (var recordToInsert in newPersons)
             {
+                // *** จุดสำคัญ: กำหนด PartitionKey ให้เป็นค่าที่ต้องการทุกครั้ง ***
+                recordToInsert.PartitionKey = partitionKey; // partitionKey จะเป็น "MergedData" ที่ส่งมาจาก Function
 
-                record.PartitionKey = partitionKey;
-                if (string.IsNullOrEmpty(record.RowKey))
+                // ตรวจสอบและสร้าง RowKey ถ้าไม่มี (สำคัญมาก)
+                if (string.IsNullOrEmpty(recordToInsert.RowKey))
                 {
-                    record.RowKey = Guid.NewGuid().ToString();
+                    _logger.LogWarning("Record with OpportunityId '{OppId}' is missing a RowKey. Generating a new GUID.", recordToInsert.OpportunityId);
+                    recordToInsert.RowKey = Guid.NewGuid().ToString();
                 }
-                record.Timestamp = DateTimeOffset.UtcNow;
+                recordToInsert.Timestamp = DateTimeOffset.UtcNow; // ตั้งค่า Timestamp
 
-                insertBatch.Add(new TableTransactionAction(TableTransactionActionType.UpsertReplace, record));
+                insertBatch.Add(new TableTransactionAction(TableTransactionActionType.UpsertReplace, recordToInsert));
                 if (insertBatch.Count == 100)
                 {
                     insertTasks.Add(_personDocumentTableClient.SubmitTransactionAsync(insertBatch));
@@ -660,7 +655,7 @@ public class TableStorageService : IDataService
 
             return new DataStatistics
             {
-                TotalCustomers = personDocuments.Count, 
+                TotalCustomers = personDocuments.Count,
                 TotalMatches = matches.Count,
                 PendingMatches = matches.Count(m => m.Status == "Pending"),
                 ApprovedMatches = matches.Count(m => m.Status == "Approved"),
@@ -811,10 +806,10 @@ public class TableStorageService : IDataService
     }
     public Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId)
     {
-        throw new NotImplementedException(); 
+        throw new NotImplementedException();
     }
 
-   
+
 
 
 }

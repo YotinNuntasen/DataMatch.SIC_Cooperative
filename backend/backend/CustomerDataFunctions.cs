@@ -137,19 +137,14 @@ namespace DataMatchBackend.Functions
                     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body is empty or invalid. 'records' array is required.");
                 }
 
-                // --- START: ส่วนที่แก้ไข ---
-
-                // 1. กำหนด PartitionKey ที่ต้องการใช้เป็นค่าคงที่
                 const string targetPartitionKey = "MergedData";
-
-                // --- END: ส่วนที่แก้ไข ---
 
                 if (_validationService != null)
                 {
                     _logger.LogInformation("Validating {RecordCount} records before replacement for PartitionKey '{TargetPartitionKey}'.", request.Records.Count, targetPartitionKey);
                     foreach (var record in request.Records)
                     {
-                        // ไม่จำเป็นต้อง Validate PartitionKey ที่นี่ เพราะเราจะเขียนทับอยู่แล้ว
+
                         var validationResult = _validationService.ValidatePersonDocument(record);
                         if (!validationResult.IsValid)
                         {
@@ -163,7 +158,7 @@ namespace DataMatchBackend.Functions
 
                 _logger.LogInformation("Executing replace operation for PartitionKey '{TargetPartitionKey}' with {RecordCount} new records.", targetPartitionKey, request.Records.Count);
 
- 
+
                 var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records, targetPartitionKey);
 
                 var result = new
@@ -172,8 +167,6 @@ namespace DataMatchBackend.Functions
                     DeletedCount = deletedCount,
                     InsertedCount = insertedCount
                 };
-
-                
 
                 return await CreateOkResponse(req, result, result.Message);
             }
@@ -516,11 +509,11 @@ namespace DataMatchBackend.Functions
         /// </summary>
         private PersonDocument FilterDataForSave(PersonDocument customer)
         {
-            
+
             var filtered = new PersonDocument
             {
-                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition", 
-                RowKey = customer.RowKey, 
+                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition",
+                RowKey = customer.RowKey,
                 OpportunityId = customer.OpportunityId,
                 OpportunityName = customer.OpportunityName,
                 CustShortDimName = customer.CustShortDimName,
@@ -546,8 +539,8 @@ namespace DataMatchBackend.Functions
                 RegionDimName3 = customer.RegionDimName3,
                 SalespersonDimName = customer.SalespersonDimName,
                 description = customer.description,
-                Created = customer.Created == default ? DateTime.UtcNow : customer.Created, 
-                Modified = DateTime.UtcNow 
+                Created = customer.Created == default ? DateTime.UtcNow : customer.Created,
+                Modified = DateTime.UtcNow
             };
 
             return filtered;
