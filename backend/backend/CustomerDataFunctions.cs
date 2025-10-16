@@ -516,16 +516,12 @@ namespace DataMatchBackend.Functions
         /// </summary>
         private PersonDocument FilterDataForSave(PersonDocument customer)
         {
-            // ✅ ตรวจสอบและใช้ PartitionKey/RowKey ที่มีอยู่ หรือกำหนดค่าเริ่มต้นให้เหมาะสม
-            // ปกติ PartitionKey ควรเป็น OpportunityId
-            // และ RowKey ควรจะเป็น RowKey ของ Azure Table Item ที่ถูกจับคู่มา
+            
             var filtered = new PersonDocument
             {
-                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition", // ✅ ให้แน่ใจว่ามี PartitionKey
-                RowKey = customer.RowKey, // ✅ RowKey ไม่ควรเปลี่ยน
-                // ✅ เพิ่ม OpportunityId เข้ามาด้วย
+                PartitionKey = customer.PartitionKey ?? customer.OpportunityId ?? "DefaultPartition", 
+                RowKey = customer.RowKey, 
                 OpportunityId = customer.OpportunityId,
-                // ... (fields อื่นๆ ที่มีอยู่แล้ว)
                 OpportunityName = customer.OpportunityName,
                 CustShortDimName = customer.CustShortDimName,
                 PrefixdocumentNo = customer.PrefixdocumentNo,
