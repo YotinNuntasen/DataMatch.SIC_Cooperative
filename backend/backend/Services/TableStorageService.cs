@@ -13,31 +13,52 @@ public class TableStorageService : IDataService
     private readonly ILogger<TableStorageService> _logger;
     private readonly string _connectionString;
 
-    
+
 
     public async Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons, string partitionKey)
     {
+
         if (string.IsNullOrEmpty(partitionKey))
         {
             throw new ArgumentException("PartitionKey cannot be null or empty for replace operation.", nameof(partitionKey));
         }
 
-        _logger.LogInformation("Starting Replace operation on PartitionKey '{PartitionKey}' with {NewCount} new records.", partitionKey, newPersons.Count);
+        _logger.LogInformation("Startin g Replace operation on PartitionKey '{PartitionKey}' with {NewCount} new records.", partitionKey, newPersons.Count);
 
         var allExistingRecords = new List<ITableEntity>();
 
-        _logger.LogInformation("Fetching all existing documents with PartitionKey: {PartitionKey}", partitionKey);
 
+        _logger.LogInformation("Fetching existing documents with PartitionKey: {PartitionKey}", partitionKey);
         await foreach (var entity in _personDocumentTableClient.QueryAsync<TableEntity>(filter: $"PartitionKey eq '{partitionKey}'"))
         {
             allExistingRecords.Add(entity);
         }
-        _logger.LogInformation("Found {ExistingCount} existing records to delete.", allExistingRecords.Count);
+
+
+        var opportunityIds = newPersons.Select(p => p.OpportunityId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+
+        foreach (var oppId in opportunityIds)
+        {
+
+            string cleanupFilter = $"PartitionKey eq '{oppId}'";
+            _logger.LogInformation("Also fetching legacy documents for cleanup with PartitionKey: {LegacyPartitionKey}", oppId);
+            await foreach (var legacyEntity in _personDocumentTableClient.QueryAsync<TableEntity>(filter: cleanupFilter))
+            {
+
+                if (!allExistingRecords.Any(e => e.PartitionKey == legacyEntity.PartitionKey && e.RowKey == legacyEntity.RowKey))
+                {
+                    allExistingRecords.Add(legacyEntity);
+                }
+            }
+        }
+
+
+        _logger.LogInformation("Found {ExistingCount} total records to delete (including legacy data).", allExistingRecords.Count);
 
         var deletedCount = 0;
         var insertedCount = 0;
 
-
+        // 3. ส่วนของการลบข้อมูล (Delete Logic) ทั้งหมดที่รวบรวมมา (เหมือนเดิม)
         if (allExistingRecords.Any())
         {
             var deleteTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
@@ -62,7 +83,7 @@ public class TableStorageService : IDataService
             if (responses.All(r => !r.HasValue || (r.Value != null && !r.GetRawResponse().IsError)))
             {
                 deletedCount = allExistingRecords.Count;
-                _logger.LogInformation("Successfully deleted {DeletedCount} records from PartitionKey '{PartitionKey}'.", deletedCount, partitionKey);
+                _logger.LogInformation("Successfully deleted {DeletedCount} records.", deletedCount);
             }
             else
             {
@@ -74,6 +95,7 @@ public class TableStorageService : IDataService
 
         if (newPersons.Any())
         {
+
             var insertTasks = new List<Task<Response<IReadOnlyList<Response>>>>();
             var insertBatch = new List<TableTransactionAction>();
 
@@ -106,23 +128,6 @@ public class TableStorageService : IDataService
 
         return (deletedCount, insertedCount);
     }
-
-    public async Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId)
-    {
-        if (string.IsNullOrEmpty(opportunityId))
-        {
-            throw new ArgumentNullException(nameof(opportunityId), "OpportunityId cannot be null or empty.");
-        }
-        List<PersonDocument> results = new List<PersonDocument>();
-        string filter = $"OpportunityId eq '{opportunityId}'";
-        await foreach (PersonDocument entity in _personDocumentTableClient.QueryAsync<PersonDocument>(filter))
-        {
-            results.Add(entity);
-        }
-
-        return results;
-    }
-
 
     public async Task<PersonDocument> UpsertPersonDocumentAsync(PersonDocument person)
     {
@@ -655,9 +660,7 @@ public class TableStorageService : IDataService
 
             return new DataStatistics
             {
-                TotalCustomers = personDocuments.Count, // ใช้ merged data แทน
-                // ActiveCustomers = personDocuments.Count(c => c.Status == "Active"),
-                // InactiveCustomers = personDocuments.Count(c => c.Status == "Inactive"),
+                TotalCustomers = personDocuments.Count, 
                 TotalMatches = matches.Count,
                 PendingMatches = matches.Count(m => m.Status == "Pending"),
                 ApprovedMatches = matches.Count(m => m.Status == "Approved"),
@@ -806,6 +809,12 @@ public class TableStorageService : IDataService
             return false;
         }
     }
+    public Task<List<PersonDocument>> GetPersonDocumentsByOpportunityIdAsync(string opportunityId)
+    {
+        throw new NotImplementedException(); 
+    }
+
+   
 
 
 }

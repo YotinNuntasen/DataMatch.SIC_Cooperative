@@ -546,8 +546,8 @@ namespace DataMatchBackend.Functions
                 RegionDimName3 = customer.RegionDimName3,
                 SalespersonDimName = customer.SalespersonDimName,
                 description = customer.description,
-                Created = customer.Created == default ? DateTime.UtcNow : customer.Created, // ✅ หากไม่ได้ระบุ Created มา ให้ใช้ Now
-                Modified = DateTime.UtcNow // ✅ อัปเดต Modified เสมอ
+                Created = customer.Created == default ? DateTime.UtcNow : customer.Created, 
+                Modified = DateTime.UtcNow 
             };
 
             return filtered;
