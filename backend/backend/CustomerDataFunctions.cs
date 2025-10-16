@@ -163,10 +163,7 @@ namespace DataMatchBackend.Functions
 
                 _logger.LogInformation("Executing replace operation for PartitionKey '{TargetPartitionKey}' with {RecordCount} new records.", targetPartitionKey, request.Records.Count);
 
-                // --- START: ส่วนที่แก้ไข ---
-
-                // 2. ส่ง targetPartitionKey ไปยัง DataService (ต้องแน่ใจว่า ReplaceAllPersonDocumentsAsync รับพารามิเตอร์นี้)
-                // สมมติว่า ReplaceAllPersonDocumentsAsync ถูกแก้ไขเป็น `ReplaceAllPersonDocumentsAsync(List<PersonDocument> records, string partitionKey)`
+ 
                 var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records, targetPartitionKey);
 
                 var result = new
@@ -176,7 +173,7 @@ namespace DataMatchBackend.Functions
                     InsertedCount = insertedCount
                 };
 
-                // --- END: ส่วนที่แก้ไข ---
+                
 
                 return await CreateOkResponse(req, result, result.Message);
             }

@@ -13,7 +13,7 @@ public class TableStorageService : IDataService
     private readonly ILogger<TableStorageService> _logger;
     private readonly string _connectionString;
 
-
+    
 
     public async Task<(int deletedCount, int insertedCount)> ReplaceAllPersonDocumentsAsync(List<PersonDocument> newPersons, string partitionKey)
     {
