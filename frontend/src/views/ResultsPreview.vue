@@ -131,7 +131,7 @@
           <div class="history-info">
             <span class="history-filename">{{ record.fileName }}</span>
             <span class="history-details">{{ record.recordCount }} records • {{ formatDate(record.timestamp, true)
-            }}</span>
+              }}</span>
           </div>
           <div class="history-status" :class="{ 'status-success': record.success, 'status-error': !record.success }">
             {{ record.success ? '✅ Success' : '❌ Failed' }}
@@ -207,17 +207,15 @@ export default {
     updateFileName() { this.setFileName(this.localFileName.trim()); },
     async handleExport() { await this.exportFile(); },
 
-    // ✅ --- นี่คือเวอร์ชันที่รวมส่วนที่ดีที่สุดเข้าด้วยกัน ---
     async handleUpdate() {
       if (this.safeExportData.length === 0) {
         this.$toast.warning("No data available to update.");
         return;
       }
 
-      // 1. ใช้ await เพื่อรอผลลัพธ์จาก SweetAlert (จากโค้ดใหม่)
       const result = await this.$swal.fire({
         title: 'Are you sure?',
-        text: `This will REPLACE ALL existing data with these ${this.safeExportData.length} records. This action cannot be undone.`,
+        text: `This will REPLACE ALL existing matched data with these ${this.safeExportData.length} records. This action cannot be undone.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#16A34A',
@@ -237,11 +235,14 @@ export default {
       this.isUpdating = true;
       try {
         const payload = this.prepareUpdatePayload();
-        
+
         const response = await azureService.replaceMergedData(payload);
 
-        const successCount = response.data?.insertedCount || payload.records.length;
-        this.$toast.success(`${successCount} records have been saved successfully!`);
+
+        const insertedCount = response.data?.data?.insertedCount ?? 0
+        const deletedCount = response.data?.data?.deletedCount ?? 0;
+
+        this.$toast.success(`${insertedCount} records saved. ${deletedCount} old records removed.`);
 
         console.log("Replace result:", response.data);
 
@@ -259,8 +260,7 @@ export default {
         records: this.safeExportData
           .filter(item => item && item.sharepoint && item.azure)
           .map(item => ({
-            PartitionKey: item.azure.PartitionKey,
-            RowKey: item.azure.RowKey,
+            RowKey: item.azure.RowKey,                  
             opportunityId: item.sharepoint.opportunityId,
             opportunityName: item.sharepoint.opportunityName,
             CustShortDimName: item.azure.custShortDimName,
@@ -290,6 +290,7 @@ export default {
           }))
       };
     },
+
   },
 
   created() {

@@ -117,66 +117,75 @@ namespace DataMatchBackend.Functions
         }
 
         [Function("ReplaceMergedCustomers")]
-public async Task<HttpResponseData> ReplaceMergedCustomers(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged/replace")] HttpRequestData req)
-{
-    _logger.LogInformation("Received request to replace all merged customer data.");
-
-    try
-    {
-
-        if (!IsServiceAvailable<IDataService>())
-            return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
-
-        var authResult = await ValidateAuthenticationAsync(req);
-        if (!authResult.IsValid)
-            return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
-
-        var request = await ParseBulkUpdateRequest(req);
-        if (request == null || !request.Records.Any())
+        public async Task<HttpResponseData> ReplaceMergedCustomers(
+     [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged/replace")] HttpRequestData req)
         {
-            return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body is empty or invalid. 'records' array is required.");
-        }
+            _logger.LogInformation("Received request to replace all merged customer data.");
 
-
-        if (_validationService != null)
-        {
-            _logger.LogInformation("Validating {RecordCount} records before replacement.", request.Records.Count);
-            foreach (var record in request.Records)
+            try
             {
-                var validationResult = _validationService.ValidatePersonDocument(record);
-                if (!validationResult.IsValid)
+                if (!IsServiceAvailable<IDataService>())
+                    return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
+
+                var authResult = await ValidateAuthenticationAsync(req);
+                if (!authResult.IsValid)
+                    return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
+
+                var request = await ParseBulkUpdateRequest(req);
+                if (request == null || !request.Records.Any())
                 {
-        
-                    var errorMessage = $"Validation failed for record with RowKey '{record.RowKey}': {string.Join(", ", validationResult.Errors)}";
-                    _logger.LogWarning(errorMessage);
-                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, errorMessage);
+                    return await CreateErrorResponse(req, HttpStatusCode.BadRequest, "Request body is empty or invalid. 'records' array is required.");
                 }
+
+                // --- START: ส่วนที่แก้ไข ---
+
+                // 1. กำหนด PartitionKey ที่ต้องการใช้เป็นค่าคงที่
+                const string targetPartitionKey = "MergedData";
+
+                // --- END: ส่วนที่แก้ไข ---
+
+                if (_validationService != null)
+                {
+                    _logger.LogInformation("Validating {RecordCount} records before replacement for PartitionKey '{TargetPartitionKey}'.", request.Records.Count, targetPartitionKey);
+                    foreach (var record in request.Records)
+                    {
+                        // ไม่จำเป็นต้อง Validate PartitionKey ที่นี่ เพราะเราจะเขียนทับอยู่แล้ว
+                        var validationResult = _validationService.ValidatePersonDocument(record);
+                        if (!validationResult.IsValid)
+                        {
+                            var errorMessage = $"Validation failed for record with RowKey '{record.RowKey}': {string.Join(", ", validationResult.Errors)}";
+                            _logger.LogWarning(errorMessage);
+                            return await CreateErrorResponse(req, HttpStatusCode.BadRequest, errorMessage);
+                        }
+                    }
+                    _logger.LogInformation("All records passed validation.");
+                }
+
+                _logger.LogInformation("Executing replace operation for PartitionKey '{TargetPartitionKey}' with {RecordCount} new records.", targetPartitionKey, request.Records.Count);
+
+                // --- START: ส่วนที่แก้ไข ---
+
+                // 2. ส่ง targetPartitionKey ไปยัง DataService (ต้องแน่ใจว่า ReplaceAllPersonDocumentsAsync รับพารามิเตอร์นี้)
+                // สมมติว่า ReplaceAllPersonDocumentsAsync ถูกแก้ไขเป็น `ReplaceAllPersonDocumentsAsync(List<PersonDocument> records, string partitionKey)`
+                var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records, targetPartitionKey);
+
+                var result = new
+                {
+                    Message = $"Data replacement for PartitionKey '{targetPartitionKey}' completed successfully.",
+                    DeletedCount = deletedCount,
+                    InsertedCount = insertedCount
+                };
+
+                // --- END: ส่วนที่แก้ไข ---
+
+                return await CreateOkResponse(req, result, result.Message);
             }
-            _logger.LogInformation("All records passed validation.");
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred during the replace operation.");
+                return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while replacing data.");
+            }
         }
-       
-
-        _logger.LogInformation("Executing replace operation with {RecordCount} new records.", request.Records.Count);
-
-        var (deletedCount, insertedCount) = await _dataService!.ReplaceAllPersonDocumentsAsync(request.Records);
-
-        var result = new
-        {
-            Message = "Data replacement completed successfully.",
-            DeletedCount = deletedCount,
-            InsertedCount = insertedCount
-        };
-
-        return await CreateOkResponse(req, result, result.Message);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "An error occurred during the replace operation.");
-        return await CreateErrorResponse(req, HttpStatusCode.InternalServerError, "An unexpected error occurred while replacing data.");
-    }
-}
-
         [Function("CreateMergedCustomer")]
         public async Task<HttpResponseData> CreateMergedCustomer(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "customer-data/merged")] HttpRequestData req)
