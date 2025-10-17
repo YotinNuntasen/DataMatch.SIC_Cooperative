@@ -1,19 +1,21 @@
 import * as msal from "@azure/msal-browser";
 
-
 const msalConfig = {
   auth: {
     clientId: "7281d6d6-29d6-40cb-87d2-1bc6eb678cb3",
-    authority: "https://login.microsoftonline.com/f21d466c-a8db-4dbe-9a97-4e79d654a7f8",
-    redirectUri: window.location.origin, 
+    authority:
+      "https://login.microsoftonline.com/f21d466c-a8db-4dbe-9a97-4e79d654a7f8",
+    redirectUri: [
+      "https://sicwebapp001.z23.web.core.windows.net/nbo-matching/",
+      "https://webapp.sic.co.th/nbo-matching/",
+    ],
   },
   cache: {
     cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
   },
   system: {
-   
-    loggerOptions: { 
+    loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
         if (containsPii) return;
         switch (level) {
@@ -25,7 +27,7 @@ const msalConfig = {
             return;
         }
       },
-      piiLoggingEnabled: false
+      piiLoggingEnabled: false,
     },
   },
 };
@@ -40,10 +42,8 @@ const sharepointTokenRequest = {
   scopes: ["https://sicth.sharepoint.com/AllSites.Read"],
 };
 
-
-
 const state = {
-  accessToken: localStorage.getItem("accessToken") || null, 
+  accessToken: localStorage.getItem("accessToken") || null,
   account: JSON.parse(localStorage.getItem("account")) || null,
   isInitialized: false,
 };
@@ -53,7 +53,7 @@ const getters = {
   account: (state) => state.account,
   userEmail: (state) => state.account?.username || "",
   userName: (state) => state.account?.name || "",
-  isDevelopmentMode: () => process.env.NODE_ENV === 'development',
+  isDevelopmentMode: () => process.env.NODE_ENV === "development",
 };
 
 const mutations = {
@@ -69,7 +69,7 @@ const mutations = {
   CLEAR_USER(state) {
     state.accessToken = null;
     state.account = null;
-    msalInstance.clearCache(); 
+    msalInstance.clearCache();
     localStorage.removeItem("accessToken");
     localStorage.removeItem("account");
   },
@@ -78,21 +78,21 @@ const mutations = {
 const actions = {
   async initialize({ commit }) {
     if (state.isInitialized) return;
-    
+
     await msalInstance.initialize();
-    
+
     await msalInstance.handleRedirectPromise();
-    
+
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       msalInstance.setActiveAccount(accounts[0]);
-    
-      commit("SET_USER", { 
-          accessToken: localStorage.getItem('accessToken'), // 
-          account: accounts[0] 
+
+      commit("SET_USER", {
+        accessToken: localStorage.getItem("accessToken"), //
+        account: accounts[0],
       });
     }
-    
+
     commit("SET_INITIALIZED", true);
   },
 
@@ -102,18 +102,17 @@ const actions = {
       if (!state.isInitialized) {
         await dispatch("initialize");
       }
-      
+
       const authResult = await msalInstance.loginPopup(loginRequest);
-      
+
       msalInstance.setActiveAccount(authResult.account);
-      
+
       commit("SET_USER", {
         accessToken: authResult.accessToken,
         account: authResult.account,
       });
-      
-      return authResult;
 
+      return authResult;
     } catch (error) {
       console.error("Login failed:", error);
       let errorMessage = "Login failed. Please try again.";
@@ -122,8 +121,12 @@ const actions = {
           errorMessage = "Login was cancelled.";
         } else if (error.errorCode.includes("popup_window_error")) {
           errorMessage = "Popup blocked. Please allow popups for this site.";
-        } else if (error.errorCode.includes("consent_required") || error.message.includes("AADSTS65001")) {
-           errorMessage = "Consent is required from an administrator. Please contact your IT department.";
+        } else if (
+          error.errorCode.includes("consent_required") ||
+          error.message.includes("AADSTS65001")
+        ) {
+          errorMessage =
+            "Consent is required from an administrator. Please contact your IT department.";
         }
       }
       dispatch("setError", errorMessage, { root: true });
@@ -138,11 +141,9 @@ const actions = {
     if (account) {
       await msalInstance.logoutPopup({ account });
     }
-    commit('CLEAR_USER');
-    
+    commit("CLEAR_USER");
   },
-  
-  
+
   async acquireSharePointToken({ state, dispatch }) {
     if (!state.isInitialized) {
       await dispatch("initialize");
@@ -151,29 +152,36 @@ const actions = {
     const account = msalInstance.getActiveAccount();
     if (!account) {
       console.warn("No active account found. Attempting to log in.");
-      await dispatch('login');
+      await dispatch("login");
       const newAccount = msalInstance.getActiveAccount();
       if (!newAccount) throw new Error("Login failed, cannot acquire token.");
-      
+
       const request = { ...sharepointTokenRequest, account: newAccount };
       const response = await msalInstance.acquireTokenPopup(request);
       return response.accessToken;
     }
-    
+
     const request = { ...sharepointTokenRequest, account };
 
     try {
       const response = await msalInstance.acquireTokenSilent(request);
       return response.accessToken;
     } catch (error) {
-      console.warn("Silent token acquisition failed, falling back to popup.", error);
+      console.warn(
+        "Silent token acquisition failed, falling back to popup.",
+        error
+      );
       if (error instanceof msal.InteractionRequiredAuthError) {
         try {
           const response = await msalInstance.acquireTokenPopup(request);
           return response.accessToken;
         } catch (popupError) {
           console.error("Popup token acquisition failed.", popupError);
-          dispatch("setError", "Could not get authorization token. Please try logging in again.", { root: true });
+          dispatch(
+            "setError",
+            "Could not get authorization token. Please try logging in again.",
+            { root: true }
+          );
           throw popupError;
         }
       } else {

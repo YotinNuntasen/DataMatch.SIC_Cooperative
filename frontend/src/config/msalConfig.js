@@ -5,8 +5,8 @@ import * as msal from "@azure/msal-browser";
 // Environment-based configuration
 const getRedirectUri = () => {
   const baseUrl = process.env.NODE_ENV === 'production' 
-    ? process.env.VUE_APP_BASE_URL || window.location.origin
-    : "http://localhost:8080";
+    ? process.env.VUE_APP_BASE_URL || "https://sicwebapp001.z23.web.core.windows.net/nbo-matching/"
+    : "https://webapp.sic.co.th/nbo-matching/";
   return baseUrl;
 };
 
