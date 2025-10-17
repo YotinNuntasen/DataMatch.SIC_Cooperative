@@ -5,8 +5,8 @@ import * as msal from "@azure/msal-browser";
 // Environment-based configuration
 const getRedirectUri = () => {
   const baseUrl = process.env.NODE_ENV === 'production' 
-    ? process.env.VUE_APP_BASE_URL || "https://sicwebapp001.z23.web.core.windows.net/nbo-matching/"
-    : "https://webapp.sic.co.th/nbo-matching/";
+    ? process.env.VUE_APP_BASE_URL || window.location.origin
+    : "http://localhost:8080";
   return baseUrl;
 };
 
@@ -15,7 +15,8 @@ export const msalConfig = {
   auth: {
     clientId: process.env.VUE_APP_CLIENT_ID || "7281d6d6-29d6-40cb-87d2-1bc6eb678cb3",
     authority: process.env.VUE_APP_AUTHORITY || "https://login.microsoftonline.com/f21d466c-a8db-4dbe-9a97-4e79d654a7f8",
-    redirectUri: getRedirectUri(),
+    redirectUri: "https://webapp.sic.co.th/nbo-matching/",
+    //https://sicwebapp001.z23.web.core.windows.net/nbo-matching/
   },
   cache: {
     cacheLocation: "localStorage",
