@@ -49,8 +49,6 @@ function generateCSVContent(data, selectedColumns) {
 
   const columnLabels = getColumnLabels();
   let columnsToExport = selectedColumns || [];
-
-  // สร้าง header row โดยใช้ label ที่อ่านง่าย
   const headerRow = columnsToExport.map(colKey => {
     const label = columnLabels[colKey] || colKey;
     return escapeCSVField(label);
@@ -150,8 +148,6 @@ function downloadCSVFile(csvContent, filename) {
     link.setAttribute("href", url);
     link.setAttribute("download", filename);
     link.style.visibility = "hidden";
-
-    // Trigger download
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -269,21 +265,21 @@ function generateSummaryData(data) {
     industryStats[industry] = (industryStats[industry] || 0) + 1;
   });
 
-  const summary = [
-    { metric: "Total Records", value: totalRecords },
-    { metric: "Manual Matches", value: manualMatches },
-    { metric: "Auto Matches", value: autoMatches },
-    { metric: "AI Matches", value: aiMatches },
-    {
-      metric: "Average Similarity",
-      value: Math.round(avgSimilarity * 100) / 100 + "%",
-    },
-    { metric: "Excellent Matches (90%+)", value: excellentMatches },
-    { metric: "Good Matches (80-89%)", value: goodMatches },
-    { metric: "Medium Matches (60-79%)", value: mediumMatches },
-    { metric: "Low Matches (<60%)", value: lowMatches },
-    { metric: "Export Date", value: new Date().toISOString().split("T")[0] },
-  ];
+  // const summary = [
+  //   { metric: "Total Records", value: totalRecords },
+  //   { metric: "Manual Matches", value: manualMatches },
+  //   { metric: "Auto Matches", value: autoMatches },
+  //   { metric: "AI Matches", value: aiMatches },
+  //   {
+  //     metric: "Average Similarity",
+  //     value: Math.round(avgSimilarity * 100) / 100 + "%",
+  //   },
+  //   { metric: "Excellent Matches (90%+)", value: excellentMatches },
+  //   { metric: "Good Matches (80-89%)", value: goodMatches },
+  //   { metric: "Medium Matches (60-79%)", value: mediumMatches },
+  //   { metric: "Low Matches (<60%)", value: lowMatches },
+  //   { metric: "Export Date", value: new Date().toISOString().split("T")[0] },
+  // ];
 
   // Add country breakdown
   Object.entries(countryStats)
@@ -382,7 +378,7 @@ export function getAvailableFormats() {
       mimeType:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       extension: ".xlsx",
-      supported: false, // Requires additional library
+      supported: false, 
     },
   ];
 }

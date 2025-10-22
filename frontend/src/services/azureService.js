@@ -135,7 +135,6 @@ class AzureService {
         company: transformedSellToCustomerName,
         country: item.regionDimName3 || "",
         industry: item.custAppDimName || "",
-        // ➡️ ใช้ item.RowKey เป็น ID หลักของ Azure Item
         id: item.RowKey || crypto.randomUUID(),
       };
 
@@ -359,45 +358,45 @@ class AzureService {
       editor: item.Editor?.Title || "Unknown",
     }));
   }
-  async getPreviouslyMergedData() {
-    try {
-      console.log("🔄 Fetching previously merged data from backend...");
+  // async getPreviouslyMergedData() {
+  //   try {
+  //     console.log("🔄 Fetching previously merged data from backend...");
 
-      const accessToken = this.getStoredToken();
-      if (!accessToken) {
-        console.warn(
-          "No access token found, cannot fetch previously merged data."
-        );
-        return [];
-      }
+  //     const accessToken = this.getStoredToken();
+  //     if (!accessToken) {
+  //       console.warn(
+  //         "No access token found, cannot fetch previously merged data."
+  //       );
+  //       return [];
+  //     }
 
-      const response = await this.apiClient.get("/customer-data/merged", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+  //     const response = await this.apiClient.get("/customer-data/merged", {
+  //       headers: {
+  //         Authorization: `Bearer ${accessToken}`,
+  //       },
+  //     });
 
-      if (
-        response.data &&
-        response.data.success &&
-        Array.isArray(response.data.data)
-      ) {
-        console.log(
-          `✅ Fetched ${response.data.data.length} previously merged records.`
-        );
-        return response.data.data; 
-      } else {
-        throw new Error(
-          response.data?.message ||
-            "Invalid response when fetching merged data."
-        );
-      }
-    } catch (error) {
-      console.error("❌ Failed to fetch previously merged data:", error);
+  //     if (
+  //       response.data &&
+  //       response.data.success &&
+  //       Array.isArray(response.data.data)
+  //     ) {
+  //       console.log(
+  //         `✅ Fetched ${response.data.data.length} previously merged records.`
+  //       );
+  //       return response.data.data; 
+  //     } else {
+  //       throw new Error(
+  //         response.data?.message ||
+  //           "Invalid response when fetching merged data."
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("❌ Failed to fetch previously merged data:", error);
       
-      return [];
-    }
-  }
+  //     return [];
+  //   }
+  // }
    async replaceMergedData(payload) {
     try {
       console.log(`🔄 Replacing all merged data with ${payload.records.length} new records...`);

@@ -77,7 +77,6 @@ const mutations = {
       timestamp: new Date().toISOString(),
       ...exportRecord,
     });
-    // จำกัดให้แสดงแค่ 10 รายการล่าสุด
     if (state.exportHistory.length > 10) {
       state.exportHistory = state.exportHistory.slice(0, 10);
     }
@@ -104,7 +103,7 @@ const mutations = {
 };
 
 const actions = {
-  // Action หลักสำหรับเริ่มกระบวนการ Export
+  // Action Export
   async exportFile({ state, dispatch }) {
     if (!state.exportData || state.exportData.length === 0) {
       dispatch("setError", "No data to export.");
@@ -112,7 +111,7 @@ const actions = {
     }
 
     try {
-      // ส่ง selectedColumns ไปให้ action ย่อย
+      // Set Column to Action
       const options = { selectedColumns: state.selectedColumns };
 
       if (state.exportFormat === "excel") {
@@ -172,7 +171,6 @@ const actions = {
     }
   },
 
-  // Actions สำหรับตั้งค่า
   updateSelectedColumns({ commit }, columns) {
     commit("SET_SELECTED_COLUMNS", columns);
   },
@@ -183,13 +181,11 @@ const actions = {
     commit("SET_FILE_NAME", fileName);
   },
 
-  // Action ย่อยสำหรับ Export เป็น Excel
+  // Export Excel File Action
   async exportToExcel({ state, commit, dispatch }, options) {
-    // รับ options เข้ามา
     commit("SET_LOADING", true);
     commit("CLEAR_ERROR");
     try {
-      // ✅ ใช้ utility function ที่ import มา
       await exportToExcel(
         state.exportData,
         `${state.fileName}.xlsx`,
@@ -218,13 +214,11 @@ const actions = {
     }
   },
 
-  // Action ย่อยสำหรับ Export เป็น CSV
+  // Action CSV File Export
   async exportToCsv({ state, commit, dispatch }, options) {
-    // รับ options เข้ามา
     commit("SET_LOADING", true);
     commit("CLEAR_ERROR");
     try {
-      // ✅ ใช้ utility function ที่ import มา
       await exportToCSV(
         state.exportData,
         `${state.fileName}.csv`,
@@ -237,9 +231,6 @@ const actions = {
         recordCount: state.exportData.length,
         success: true,
       });
-
-      // (Optional) หากมี notification system
-      // dispatch("notifications/showSuccess", "CSV file exported successfully!", { root: true });
 
       console.log("✅ CSV export completed");
     } catch (error) {
@@ -256,7 +247,6 @@ const actions = {
     }
   },
 
-  // Actions สำหรับจัดการ state
   clearExportHistory({ commit }) {
     commit("CLEAR_EXPORT_HISTORY");
   },

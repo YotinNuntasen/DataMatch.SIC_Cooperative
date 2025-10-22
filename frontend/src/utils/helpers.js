@@ -1,5 +1,3 @@
-// utils/helpers.js
-
 /**
  * Normalize date to ISO string
  */
@@ -151,8 +149,6 @@ export function createMergedPersonDocument(sharePointItem, azureItem) {
     id: azureItem.RowKey || azureItem.id,
   };
 }
-
-// เพิ่มใน helpers.js
 
 /**
  * Get unique record key

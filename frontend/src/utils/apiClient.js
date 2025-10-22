@@ -1,4 +1,3 @@
-// utils/apiClient.js - ปรับให้ใช้งานง่าย
 import axios from "axios";
 import { apiConfig, defaultHeaders } from "../config/apiConfig";
 

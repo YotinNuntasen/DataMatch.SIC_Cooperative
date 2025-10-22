@@ -1,5 +1,3 @@
-// datamatching.js
-
 import sharepointService from "../services/sharepointService";
 import azureService from "../services/azureService";
 import { calculateSimilarity } from "../utils/similarity";
@@ -29,7 +27,7 @@ function normalizeDateToISOString(value) {
   return dateObj.toISOString();
 }
 
-// Helper function สำหรับคำนวณรายได้
+//Calculate Revenue Per Data Matching Row
 function calculateRevenue(azureItem) {
   const rawTotalSales =
     azureItem.calculatedRevenue ||
@@ -124,7 +122,6 @@ const getters = {
 
         // Handle specific sorting cases for dates and currencies
         if (sortKey.includes("Date")) {
-          // ➡️ ปรับปรุงการเปรียบเทียบ Date
           valA = valA ? new Date(valA).getTime() : -Infinity;
           valB = valB ? new Date(valB).getTime() : -Infinity;
         } else if (sortKey === "calculatedRevenue") {

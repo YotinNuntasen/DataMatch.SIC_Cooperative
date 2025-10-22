@@ -1,5 +1,3 @@
-// config/msalConfig.js
-
 import * as msal from "@azure/msal-browser";
 
 // Environment-based configuration

@@ -1,4 +1,4 @@
-// utils/formatters.js
+
 /**
  * Centralized formatting utilities
  */
