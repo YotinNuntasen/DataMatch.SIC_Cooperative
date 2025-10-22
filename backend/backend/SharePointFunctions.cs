@@ -198,7 +198,6 @@ namespace DataMatchBackend.Functions
                     return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
                 }
 
-                // ตรวจสอบ admin role
                 if (!await ValidateAdminRole(req))
                 {
                     return await CreateErrorResponse(req, HttpStatusCode.Forbidden, "Admin access required");
@@ -388,7 +387,7 @@ namespace DataMatchBackend.Functions
                 var userInfo = await authenAccess.ValidateTokenAsync(req);
                 return userInfo?.HasRole(Constants.Roles.Admin) == true;
             }
-            return true; // ถ้าไม่มี auth service ให้ผ่าน
+            return true;
         }
 
         private async Task<(bool success, string message, Dictionary<string, object> details)> PerformConnectionTest(string userToken)
@@ -460,7 +459,7 @@ namespace DataMatchBackend.Functions
         }
     }
 
-    // Request/Response models (ไม่เปลี่ยนแปลง)
+    // Request/Response models 
     public class SharePointSearchRequest
     {
         [JsonPropertyName("query")]

@@ -56,7 +56,6 @@ export function calculateNameSimilarity(name1, name2) {
 
   if (cleanName1 === cleanName2) return 100;
 
-  // ตรวจสอบว่าเป็น Substring หรือไม่ และให้คะแนนสูงขึ้นถ้าใช่
   if (cleanName1.includes(cleanName2) || cleanName2.includes(cleanName1)) {
     const minLength = Math.min(cleanName1.length, cleanName2.length);
     const maxLength = Math.max(cleanName1.length, cleanName2.length);
@@ -75,10 +74,9 @@ export function calculatePcodeSimilarity(pcode1, pcode2) {
 
   const cleanPcode1 = pcode1.toLowerCase().trim();
   const cleanPcode2 = pcode2.toLowerCase().trim();
-  // เพิ่ม logic นี้เพื่อคะแนน 75% ถ้าเป็น substring (ตามที่คุณต้องการ)
   if (cleanPcode1 === cleanPcode2) return 100;
   if (cleanPcode1.includes(cleanPcode2) || cleanPcode2.includes(cleanPcode1)) return 75;
-  return calculateLevenshteinSimilarity(cleanPcode1, cleanPcode2); // ใช้ Levenshtein ถ้าไม่ใช่ substring
+  return calculateLevenshteinSimilarity(cleanPcode1, cleanPcode2); 
 }
 
 /**
@@ -119,7 +117,6 @@ export function calculateDateSimilarity(spDateStr, azureDateStr) {
     const spDate = new Date(spDateStr);
     const azureDate = new Date(azureDateStr);
 
-    // ตรวจสอบว่าวันที่ถูกต้องหรือไม่
     if (isNaN(spDate.getTime()) || isNaN(azureDate.getTime())) {
       console.warn("Invalid date format for similarity comparison.", { spDateStr, azureDateStr });
       return 0;
@@ -131,18 +128,18 @@ export function calculateDateSimilarity(spDateStr, azureDateStr) {
     const diffTime = Math.abs(azureDate.getTime() - spDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    const thresholdDays = 30; // 1 เดือน
+    const thresholdDays = 30; 
 
-    if (diffDays <= 0) { // Same day
+    if (diffDays <= 0) { 
       return 100;
-    } else if (diffDays <= thresholdDays) { // Within 1 month
-      return 85; // คะแนนสูงพอควร
-    } else if (diffDays <= thresholdDays * 2) { // Within 2 months
-      return 60; // คะแนนปานกลาง
-    } else if (diffDays <= thresholdDays * 3) { // Within 3 months
-      return 40; // คะแนนต่ำ
+    } else if (diffDays <= thresholdDays) { 
+      return 85;
+    } else if (diffDays <= thresholdDays * 2) { 
+      return 60; 
+    } else if (diffDays <= thresholdDays * 3) { 
+      return 40; 
     }
-    return 0; // มากกว่า 3 เดือน ถือว่าไม่เกี่ยวข้องกัน
+    return 0; 
   } catch (error) {
     console.warn("Could not parse dates for similarity comparison. Returning 0.", { spDateStr, azureDateStr, error });
     return 0;
@@ -208,9 +205,6 @@ export function calculateSimilarityWithConfidence(sharePointItem, azureItem) {
   if (similarity >= 90) {
     confidence = "Excellent";
     confidenceColor = "#38a169";
-  } else if (similarity >= 80) {
-    confidence = "High";
-    confidenceColor = "#3182ce";
   } else if (similarity >= 60) {
     confidence = "Medium";
     confidenceColor = "#d69e2e";
@@ -337,26 +331,25 @@ export function compareTextStatus(value1, value2) {
   const clean1 = cleanStringForComparison(value1);
   const clean2 = cleanStringForComparison(value2);
   
-  if (!clean1 && !clean2) return 'neutral'; // ทั้งคู่ว่าง
-  if (!clean1 || !clean2) return 'missing'; // อันใดอันหนึ่งว่าง
+  if (!clean1 && !clean2) return 'neutral'; 
+  if (!clean1 || !clean2) return 'missing'; 
   
-  if (clean1 === clean2) return 'exact-match'; // เหมือนกันทุกประการ
-  
-  // ตรวจสอบว่าเป็น substring หรือไม่
+  if (clean1 === clean2) return 'exact-match'; 
+ 
   if (clean1.includes(clean2) || clean2.includes(clean1)) {
-    return 'partial-match'; // คล้ายกัน
+    return 'partial-match'; 
   }
   
-  // ใช้ Levenshtein distance เพื่อตรวจสอบความคล้าย
+ 
   const similarity = calculateLevenshteinSimilarity(clean1, clean2);
   if (similarity >= 80) return 'high-match';
   if (similarity >= 60) return 'medium-match';
   
-  return 'no-match'; // ไม่เหมือนกัน
+  return 'no-match'; 
 }
 
 /**
- * เปรียบเทียบวันที่และคืนค่าสถานะสี
+ * Compare DateTime For Show Color
  */
 export function compareDateStatus(date1, date2) {
   if (!date1 && !date2) return 'neutral';
@@ -368,16 +361,15 @@ export function compareDateStatus(date1, date2) {
     
     if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 'invalid';
     
-    // เปรียบเทียบแค่วันที่ (ไม่รวมเวลา)
     d1.setHours(0, 0, 0, 0);
     d2.setHours(0, 0, 0, 0);
     
     const diffDays = Math.abs((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
     
     if (diffDays === 0) return 'exact-match';
-    if (diffDays <= 7) return 'high-match';
-    if (diffDays <= 30) return 'medium-match';
-    if (diffDays <= 90) return 'low-match';
+    if (diffDays <= 30) return 'high-match';
+    if (diffDays <= 90) return 'medium-match';
+    if (diffDays <= 180) return 'low-match';
     
     return 'no-match';
   } catch (error) {
@@ -386,7 +378,7 @@ export function compareDateStatus(date1, date2) {
 }
 
 /**
- * ทำความสะอาดข้อความสำหรับการเปรียบเทียบ
+ * CLean String 
  */
 function cleanStringForComparison(str) {
   if (!str) return '';

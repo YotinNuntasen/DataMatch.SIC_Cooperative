@@ -47,17 +47,14 @@ function calculateDateRange(s9DWINEntryDate) {
 
   try {
     const documentDate = new Date(s9DWINEntryDate);
-    // ตรวจสอบว่าเป็นวันที่ถูกต้องหรือไม่
     if (isNaN(documentDate.getTime())) {
       console.warn(`[Date Range] Invalid s9DWINEntryDate:`, s9DWINEntryDate);
       return null;
     }
 
-    // คำนวณวันเริ่มต้น (ย้อนหลัง 1.5 เดือน)
     const startDate = new Date(documentDate);
     startDate.setMonth(startDate.getMonth() - 1.5);
 
-    // คำนวณวันสิ้นสุด (ไปข้างหน้า 2 ปี)
     const endDate = new Date(documentDate);
     endDate.setFullYear(endDate.getFullYear() + 2);
 
@@ -71,10 +68,10 @@ function calculateDateRange(s9DWINEntryDate) {
 const state = {
   sharePointData: [],
   azureTableData: [],
-  previouslyMatchedData: [], // ➡️ เก็บข้อมูล PersonDocument ที่โหลดมาจาก backend
+  previouslyMatchedData: [],
   selectedSharePointItem: null,
   similarItems: [],
-  matchedGroups: {}, // ➡️ ไม่ต้องโหลดจาก localStorage โดยตรงอีก เพราะจะ reconstruct จาก previouslyMatchedData
+  matchedGroups: {}, 
   showAllSimilar: false,
   loading: false,
   error: null,
@@ -91,7 +88,7 @@ const getters = {
   selectedSharePointItem: (state) => state.selectedSharePointItem,
   matchedGroupsArray: (state) => Object.values(state.matchedGroups || {}),
 
-  // Enhanced SharePoint data พร้อม revenue calculation
+
   enhancedSharePointData: (state) => {
     if (!state.sharePointData || !Array.isArray(state.sharePointData)) {
       return [];
@@ -159,10 +156,9 @@ const getters = {
   flatMatchedPairs: (state) => {
     return Object.values(state.matchedGroups).flatMap((group) =>
       group.matchedCustomers.map((customer) => ({
-        // ➡️ id ควรมาจาก PersonDocument.RowKey ที่บันทึกไว้
         id: customer.RowKey,
         sharepoint: group.sharePointItem,
-        azure: customer, // ทั้ง PersonDocument ถูกใช้เป็น azure
+        azure: customer, 
         calculatedRevenue: customer.calculatedRevenue,
       }))
     );
@@ -202,13 +198,12 @@ const getters = {
     if (!state.selectedSharePointItem) return [];
 
     const currentGroup = state.matchedGroups[state.selectedSharePointItem.id];
-    // ➡️ Azure items ที่จับคู่แล้วจะถูกเก็บใน previouslyMatchedData และถูกกรองออกจาก similarItems
     const matchedAzureRowKeys = currentGroup
       ? currentGroup.matchedCustomers.map((m) => m.RowKey)
       : [];
 
     let filteredItems = (state.similarItems || []).filter(
-      (item) => !matchedAzureRowKeys.includes(item.RowKey || item.rowKey) // เพิ่ม fallback สำหรับ case sensitivity
+      (item) => !matchedAzureRowKeys.includes(item.RowKey || item.rowKey) 
     );
 
     const sortKey = state.azureSortKey;
@@ -219,7 +214,6 @@ const getters = {
         let valA, valB;
 
         if (sortKey === "documentDate") {
-          // ➡️ ปรับปรุงการเปรียบเทียบ Date
           valA = a[sortKey] ? new Date(a[sortKey]).getTime() : -Infinity;
           valB = b[sortKey] ? new Date(b[sortKey]).getTime() : -Infinity;
         } else if (sortKey === "similarity") {
@@ -323,7 +317,7 @@ const mutations = {
     console.log("📊 Total SharePoint items:", state.sharePointData.length);
 
     state.previouslyMatchedData.forEach((mergedDoc, index) => {
-      // ✅ แก้ไข: ใช้ camelCase (opportunityId) แทน PascalCase (OpportunityId)
+
       const spOpportunityId = mergedDoc.opportunityId;
 
       if (!spOpportunityId) {
@@ -344,8 +338,6 @@ const mutations = {
         debugInfo.missingOpportunityIds.push(spOpportunityId);
         return;
       }
-
-      // ✅ Found matching SharePoint item
       if (!newMatchedGroups[sharePointItem.id]) {
         newMatchedGroups[sharePointItem.id] = {
           sharePointItem: sharePointItem,
@@ -494,29 +486,24 @@ const mutations = {
 
       state.matchedGroups[sharepointId].matchedCustomers = state.matchedGroups[
         sharepointId
-      ].matchedCustomers.filter((c) => c.RowKey !== azureRowKey); // แก้ไขตรงนี้ให้ Filter ด้วย c.RowKey
+      ].matchedCustomers.filter((c) => c.RowKey !== azureRowKey); // 
 
       if (state.matchedGroups[sharepointId].matchedCustomers.length === 0) {
         delete state.matchedGroups[sharepointId];
       }
 
-      // ➡️ ลบข้อมูลออกจาก Backend โดยใช้ azureRowKey
       actions.deleteMatchedRecordFromBackend(null, azureRowKey);
     }
-    // ➡️ ไม่ต้องเก็บใน localStorage.matchedGroups อีกต่อไป
-    // localStorage.setItem("matchedGroups", JSON.stringify(state.matchedGroups));
+    
     console.log("MatchedGroups after REMOVE_MATCH:", state.matchedGroups);
   },
 
   CLEAR_ALL_MATCHES(state) {
     state.matchedGroups = {};
-    // ➡️ ไม่ต้องลบ localStorage.matchedGroups อีกต่อไป
-    // localStorage.removeItem("matchedGroups");
     console.log(
       "All matches cleared from local state. (Backend not affected by this action)"
     );
-    // ➡️ หากต้องการให้ Clear ALL Match จาก Backend ด้วย ต้องเรียก API ทุก item
-    // dispatch('clearAllMatchesFromBackend');
+
   },
 
   RESET_STATE(state) {
@@ -533,8 +520,7 @@ const mutations = {
     state.sharePointSortDirection = "desc";
     state.azureSortKey = "similarity";
     state.azureSortDirection = "desc";
-    // ➡️ ไม่ต้องลบ localStorage.matchedGroups อีกต่อไป
-    // localStorage.removeItem("matchedGroups");
+   
   },
 };
 
@@ -639,7 +625,7 @@ const actions = {
         `❌ Failed to delete matched record ${azureRowKey} from backend:`,
         error
       );
-      // ควรจัดการ error เช่น แสดงข้อความให้ผู้ใช้ทราบ
+     
     }
   },
 
@@ -657,7 +643,7 @@ const actions = {
 
     const azureDataToProcess = state.azureTableData;
 
-    // คำนวณ similarity และ potentialRevenue
+    
     const similarities = azureDataToProcess
       .map((azureItem) => ({
         ...azureItem,
@@ -672,12 +658,11 @@ const actions = {
 
   clearAllMatches({ commit }) {
     commit("CLEAR_ALL_MATCHES");
-    // หากต้องการให้ clear ทั้งหมดใน backend ต้องเรียก API ตาม id ของแต่ละ Record
-    // ใน context ของ matchedGroups คุณจะต้องวนลูป matchedGroups และเรียก deleteMatchedRecordFromBackend
+   
   },
 
   resetState({ commit }) {
-    commit("RESET_STATE"); // ใช้ RESET_STATE ใหม่
+    commit("RESET_STATE"); 
   },
 
   showAllSimilarItems({ commit }) {
@@ -688,58 +673,45 @@ const actions = {
     commit("SET_SHOW_ALL_SIMILAR", false);
   },
 
-  // --- เพิ่ม Action สำหรับ Sorting SharePoint Data ---
+  
   setSharePointSort({ commit, state }, { key, direction }) {
-    // direction อาจจะถูกส่งมาด้วย
     let actualDirection = direction;
     if (!actualDirection) {
-      // ถ้าไม่ได้ส่งมาให้ toggle เอง
       actualDirection =
         state.sharePointSortConfig.direction === "asc" ? "desc" : "asc";
     }
 
     if (state.sharePointSortKey === key && direction === undefined) {
-      // ถ้า key เดิมและไม่ได้ระบุ direction
       actualDirection =
         state.sharePointSortDirection === "asc" ? "desc" : "asc";
     } else if (key === "customerName" || key === "opportunityId") {
-      // default asc สำหรับ text
       actualDirection = "asc";
     } else if (key === "calculatedRevenue" || key === "s9DWINEntryDate") {
-      // default desc สำหรับ revenue/date
       actualDirection = "desc";
     } else {
-      // ถ้าเป็น key ใหม่เริ่มต้นด้วย desc
       actualDirection = "desc";
     }
 
     commit("SET_SHAREPOINT_SORT", { key, direction: actualDirection });
   },
-  // --- เพิ่ม Action สำหรับ Sorting Azure Data ---
   setAzureSort({ commit, state }, { key, direction }) {
-    // direction อาจจะถูกส่งมาด้วย
     let actualDirection = direction;
     if (!actualDirection) {
-      // ถ้าไม่ได้ส่งมาให้ toggle เอง
       actualDirection =
         state.azureSortConfig.direction === "asc" ? "desc" : "asc";
     }
 
     if (state.azureSortKey === key && direction === undefined) {
-      // ถ้า key เดิมและไม่ได้ระบุ direction
       actualDirection = state.azureSortDirection === "asc" ? "desc" : "asc";
     } else if (key === "customerName") {
-      // default asc สำหรับ text
       actualDirection = "asc";
     } else if (
       key === "similarity" ||
       key === "documentDate" ||
       key === "potentialRevenue"
     ) {
-      // default desc สำหรับ score/date/revenue
       actualDirection = "desc";
     } else {
-      // ถ้าเป็น key ใหม่เริ่มต้นด้วย desc
       actualDirection = "desc";
     }
 

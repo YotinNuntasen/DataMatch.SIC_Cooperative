@@ -40,11 +40,11 @@
         <div class="mail-list-panel">
           <div class="panel-header">
             <h2>SharePoint Opportunities</h2>
-            <!-- ใช้ displaySharePointData ซึ่งเป็นข้อมูลที่ถูกเรียงแล้ว -->
+            <!-- ใช้ displaySharePointData -->
             <span class="item-count">{{ displaySharePointData.length }} items</span>
           </div>
 
-          <!-- --- 🔥 เริ่มการเปลี่ยนแปลงสำหรับ Sorting SharePoint Opportunities 🔥 --- -->
+
           <div class="sort-controls">
             <label for="sp-sort-key" class="sort-label">Sort by:</label>
             <select id="sp-sort-key" v-model="currentSharePointSortKey" @change="changeSharePointSort"
@@ -103,7 +103,7 @@
 
             <div v-if="displaySharePointData.length === 0" class="empty-mail-list">
               <p>No SharePoint opportunities available</p>
-              <!-- ปุ่มโหลดข้อมูลตรงนี้จะถูกแก้ไขให้เรียก initializeDataAndMatches -->
+              <!-- initializeDataAndMatches -->
               <button @click="initializeDataAndMatches" class="reload-btn">Reload Data</button>
             </div>
           </div>
@@ -169,7 +169,7 @@
                       <div class="similarity-score matched">
                         {{ azureItem.documentNo }}
                       </div>
-                      <!-- ใช้ azureItem.RowKey เพื่อ unmatch เฉพาะรายการ -->
+                    
                       <button @click="handleUnmatch(selectedSharePointItem.id, azureItem.RowKey)" class="unmatch-btn"
                         title="Unmatch">×</button>
                     </div>
@@ -180,7 +180,6 @@
                       <div class="details">
                         <span class="detail">{{ azureItem.salespersonDimName || 'N/A' }}</span>
                         <span class="detail">{{ azureItem.prodChipNameDimName || 'N/A' }}</span>
-                        <!-- ใช้ formatCurrency สำหรับ calculatedRevenue -->
                         <span class="detail">{{ formatCurrency(azureItem.calculatedRevenue) || 'N/A' }}</span>
                       </div>
                     </div>
@@ -242,7 +241,7 @@ export default {
       'unmatchedSharePointData',
       'loading',
       'error',
-      'displaySharePointData',  // เก็บไว้ - อย่าลบ
+      'displaySharePointData', 
       'sharePointSortConfig',
       'azureSortConfig',
     ]),
@@ -261,9 +260,7 @@ export default {
 
       const filtered = items.filter(item => {
         const rowKey = item.RowKey || item.rowKey;
-        // ตรวจสอบว่า item นี้ถูกจับคู่แล้วในกลุ่มปัจจุบันหรือไม่
         const isMatched = matchedRowKeys.includes(rowKey);
-        // คืนค่าเป็น true ถ้า item ยังไม่ถูกจับคู่
         return !isMatched;
       });
 
@@ -303,20 +300,7 @@ export default {
       'setAzureSort',
     ]),
 
-    // ไม่จำเป็นต้องมี async initializeData() แล้ว เพราะ initializeDataAndMatches จะทำงานนั้น
-    // async initializeData() {
-    //   try {
-    //     await Promise.all([this.loadSharePointData(), this.loadAzureTableData()]);
-    //   } catch (error) {
-    //     console.error('Failed to initialize data:', error);
-    //   }
-    // },
-
-    // ไม่จำเป็นต้องมี async loadData() แล้ว
-    // async loadData() {
-    //   await this.initializeData();
-    // },
-
+   
     selectItem(item) {
       if (!item) return;
       this.selectSharePointItem(item);
@@ -658,7 +642,6 @@ export default {
 
 .mail-item:hover {
   background: #e0e0e0;
-  /* สีอ่อนลงเล็กน้อย */
 }
 
 .mail-item.selected {
@@ -776,7 +759,7 @@ export default {
   background: white;
 }
 
-/* --- 🔥 เริ่มการแก้ไข CSS สำหรับ .no-selection-state 🔥 --- */
+
 .no-selection-state {
   display: flex;
   justify-content: center;
@@ -942,7 +925,6 @@ export default {
   padding: 10px 12px;
   border-radius: 4px;
   margin-top: 15px;
-  /* เพิ่ม margin-top เพื่อเว้นระยะจาก AzureFullTable */
   margin-bottom: 12px;
 }
 

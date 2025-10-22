@@ -207,7 +207,7 @@ namespace DataMatchBackend.Functions
                     totalCount = updateRequest.Records.Count,
                     successCount = result.SuccessCount,
                     failedCount = result.FailedCount,
-                    createdRecords = result.UpsertedPeopleDocuments, // ✅ เปลี่ยนชื่อ property ให้สื่อความหมาย
+                    createdRecords = result.UpsertedPeopleDocuments, 
                     errors = result.ValidationErrors
                 };
 
@@ -298,16 +298,13 @@ namespace DataMatchBackend.Functions
 
                 if (_validationService != null)
                 {
-                    // ✅ ควรต้องมีการเรียก ValidateBulkUpdateRequest ที่เหมาะสม
-                    // var validationResult = _validationService.ValidateBulkUpdate(updateRequest);
-                    // if (!validationResult.IsValid)
-                    //     return await CreateErrorResponse(req, HttpStatusCode.BadRequest, string.Join(", ", validationResult.Errors));
+                    
                 }
 
                 if (updateRequest.CreateBackup)
                 {
                     var backupName = $"merged_backup_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
-                    // ✅ ตรวจสอบว่า IDataService ไม่เป็น null ก่อนเรียกใช้
+                    
                     if (_dataService == null)
                         return await CreateServiceUnavailableResponse(req, "Data", "ENABLE_DATA_SERVICE");
                     await _dataService.CreateBackupAsync(backupName);
@@ -323,7 +320,7 @@ namespace DataMatchBackend.Functions
                 {
                     try
                     {
-                        // ✅ ที่นี่ควรจะ FilterDataForSave และ UpsertPersonDocumentAsync ทีละรายการเหมือน ProcessBulkUpsert
+                       
                         var filteredRecord = FilterDataForSave(record);
                         var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredRecord);
                         if (upserted != null)
@@ -410,21 +407,18 @@ namespace DataMatchBackend.Functions
         {
             var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
 
-            // เพิ่ม options เพื่อให้ deserialize ได้ทั้ง camelCase และ PascalCase
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase // ✅ ควรใช้ CamelCase สำหรับ JSON output แต่ PropertyNameCaseInsensitive จะช่วยให้รับ input ได้ทั้งสองแบบ
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
             };
 
-            // ✅ ควรเปลี่ยน from records to peopleDocuments to prevent naming collisions
             return JsonSerializer.Deserialize<BulkUpdateRequest>(requestBody, options);
         }
 
         private async Task<PersonDocument?> ParsePersonDocument(HttpRequestData req)
         {
             var requestBody = await req.ReadAsStringAsync();
-            // ✅ เพิ่ม JsonSerializerOptions เพื่อรองรับ input ได้ดีขึ้น
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -432,7 +426,6 @@ namespace DataMatchBackend.Functions
             return JsonSerializer.Deserialize<PersonDocument>(requestBody ?? "{}", options);
         }
 
-        // ✅ เปลี่ยนชื่อเมธอดให้สื่อความหมายมากขึ้นว่าเป็นการ Upsert (Create หรือ Update)
         private async Task<(int SuccessCount, int FailedCount, List<PersonDocument> UpsertedPeopleDocuments, List<string> ValidationErrors)> ProcessBulkUpsert(List<PersonDocument> peopleDocumentsToUpsert)
         {
             var upsertedRecords = new List<PersonDocument>();
@@ -446,37 +439,18 @@ namespace DataMatchBackend.Functions
             {
                 try
                 {
-                    // ✅ ตรวจสอบและกำหนด PartitionKey ถ้ายังไม่ได้กำหนด (สำคัญสำหรับ Azure Table Storage)
-                    // ตัวอย่าง: ถ้า PartitionKey ควรเป็น OpportunityId
+                
                     if (string.IsNullOrEmpty(personDocument.PartitionKey) && !string.IsNullOrEmpty(personDocument.OpportunityId))
                     {
                         personDocument.PartitionKey = personDocument.OpportunityId;
                     }
-                    // ถ้ายังไม่มี RowKey ให้สร้าง RowKey จาก ID หรือ Composite Key ที่ไม่ซ้ำกัน
                     if (string.IsNullOrEmpty(personDocument.RowKey))
                     {
-                        // ✅ ควรมี RowKey ที่ระบุตัวตน (เช่น AzureItem.RowKey) ให้แน่ใจว่าถูกส่งมาจาก Frontend
-                        // ถ้าไม่ระบุ RowKey มา, การ Upsert อาจสร้าง Record ใหม่ตลอดเวลา
-                        // หรือจะสร้างจาก OpportunityId + CustomerItem.RowKey ก็ได้
-                        // ตัวอย่าง: PersonDocument.RowKey = $"{personDocument.OpportunityId}-{personDocument.documentNo}_{personDocument.lineNo}";
-                        // สำหรับกรณีนี้, RowKey ควรจะเป็น RowKey ของ Azure Item ที่ถูกเลือกมา Match
+                    
                     }
 
                     var filteredPersonDocument = FilterDataForSave(personDocument);
 
-                    // Re-enable validation if needed
-                    // if (_validationService != null)
-                    // {
-                    //     var docValidationResult = _validationService.ValidatePersonDocument(filteredPersonDocument);
-                    //     if (!docValidationResult.IsValid)
-                    //     {
-                    //         var errorMsg = $"Validation failed for '{filteredPersonDocument.CustShortDimName}': {string.Join(", ", docValidationResult.Errors)}";
-                    //         _logger.LogWarning(errorMsg);
-                    //         validationErrors.Add(errorMsg);
-                    //         failedCount++;
-                    //         continue;
-                    //     }
-                    // }
 
                     var upserted = await _dataService!.UpsertPersonDocumentAsync(filteredPersonDocument);
 
@@ -551,14 +525,13 @@ namespace DataMatchBackend.Functions
         /// </summary>
         private bool ShouldSaveCustomer(PersonDocument customer)
         {
-            // ✅ ควรต้องการทั้ง OpportunityId และ RowKey ของ Azure Item มายืนยัน
+    
             if (string.IsNullOrEmpty(customer.OpportunityId) || string.IsNullOrEmpty(customer.RowKey))
             {
                 _logger.LogWarning("Skipping save for PersonDocument with missing OpportunityId or RowKey.");
                 return false;
             }
 
-            // ตรวจสอบข้อมูลที่สำคัญอื่นๆ
             if (string.IsNullOrEmpty(customer.CustShortDimName) && string.IsNullOrEmpty(customer.SelltoCustName_SalesHeader))
             {
                 _logger.LogWarning("Skipping save for PersonDocument with no customer name information.");
@@ -568,8 +541,6 @@ namespace DataMatchBackend.Functions
             return true;
         }
 
-
-        // ✅ เปลี่ยนชื่อเมธอดและ Logic ให้ตรงกับการลบ Record ที่ถูก Match ไว้
         private async Task<HttpResponseData> UnmatchMergedRecord(HttpRequestData req, string azureRowKey)
         {
             try
@@ -582,9 +553,7 @@ namespace DataMatchBackend.Functions
                 var authResult = await ValidateAuthenticationAsync(req);
                 if (!authResult.IsValid)
                     return await CreateErrorResponse(req, HttpStatusCode.Unauthorized, authResult.ErrorMessage);
-
-                // ✅ ไม่จำเป็นต้องหาตาม sharepointId ด้วย
-                var existingRecord = await _dataService!.GetPersonDocumentAsync(azureRowKey); // หาจาก RowKey เดียว
+                var existingRecord = await _dataService!.GetPersonDocumentAsync(azureRowKey); 
                 if (existingRecord == null)
                     return await CreateErrorResponse(req, HttpStatusCode.NotFound, $"Merged record with RowKey '{azureRowKey}' not found.");
 
